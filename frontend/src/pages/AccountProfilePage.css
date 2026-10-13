@@ -1,0 +1,182 @@
+/* Customer Account & Profile Page Styles */
+
+.bb-account-container {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.bb-account-header {
+  margin-bottom: var(--space-8);
+}
+
+.bb-account-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .bb-account-layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+}
+
+/* Sidebar */
+.bb-account-sidebar {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.bb-account-user-card {
+  padding: var(--space-6);
+  background: linear-gradient(135deg, var(--brand-primary-subtle) 0%, var(--color-white) 100%);
+  border-bottom: 1px solid var(--color-slate-200);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.bb-account-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, #2563eb 100%);
+  color: var(--color-white);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
+}
+
+.bb-account-user-meta {
+  overflow: hidden;
+}
+
+.bb-account-user-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-slate-900);
+  margin-bottom: 2px;
+}
+
+.bb-account-user-phone {
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+}
+
+.bb-account-nav-list {
+  padding: var(--space-2);
+}
+
+.bb-account-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-slate-700);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.bb-account-nav-item:hover {
+  background-color: var(--color-slate-100);
+  color: var(--brand-primary);
+}
+
+.bb-account-nav-item.active {
+  background-color: var(--brand-primary-subtle);
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.bb-account-nav-icon {
+  font-size: 1.15rem;
+}
+
+/* Main Content Panel */
+.bb-account-panel {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-sm);
+}
+
+.bb-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-slate-100);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.bb-panel-title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-slate-900);
+}
+
+.bb-profile-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .bb-profile-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bb-profile-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--brand-primary-subtle);
+  border: 1px solid var(--brand-primary-border);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-6);
+}
+
+.bb-profile-status-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.bb-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.bb-profile-toast {
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

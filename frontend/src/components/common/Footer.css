@@ -1,0 +1,181 @@
+/* Footer Component Styles */
+
+.bb-footer {
+  background-color: var(--color-slate-900);
+  color: var(--color-slate-300);
+  margin-top: auto;
+  border-top: 1px solid var(--color-slate-800);
+}
+
+/* Trust Banner */
+.bb-trust-strip {
+  background-color: #0b1120;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: var(--space-8) 0;
+}
+
+.bb-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-6);
+}
+
+.bb-trust-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.bb-trust-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+  background-color: rgba(255, 255, 255, 0.06);
+  padding: 0.6rem;
+  border-radius: var(--radius-lg);
+}
+
+.bb-trust-title {
+  color: var(--color-white);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: 2px;
+}
+
+.bb-trust-desc {
+  font-size: var(--text-xs);
+  color: var(--color-slate-400);
+  line-height: 1.4;
+}
+
+/* Main Footer Content */
+.bb-footer-main {
+  padding: var(--space-12) 0 var(--space-8);
+}
+
+.bb-footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--space-8);
+}
+
+.bb-footer-brand-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bb-footer-logo-text {
+  font-size: 1.35rem;
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-white);
+}
+
+.bb-footer-bio {
+  font-size: var(--text-sm);
+  color: var(--color-slate-400);
+  line-height: 1.6;
+  max-width: 360px;
+}
+
+.bb-newsletter-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.bb-newsletter-success {
+  margin-top: var(--space-2);
+}
+
+.bb-newsletter-input {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-slate-700);
+  color: var(--color-white);
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  flex: 1;
+}
+
+.bb-newsletter-input:focus {
+  outline: none;
+  border-color: var(--brand-accent);
+}
+
+.bb-footer-col-title {
+  color: var(--color-white);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-4);
+}
+
+.bb-footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bb-footer-link {
+  font-size: var(--text-sm);
+  color: var(--color-slate-400);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.bb-footer-link:hover {
+  color: var(--color-white);
+}
+
+/* Bottom Bar */
+.bb-footer-bottom {
+  border-top: 1px solid var(--color-slate-800);
+  padding: var(--space-6) 0;
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+}
+
+.bb-footer-bottom-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.bb-payment-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.bb-payment-pill {
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-slate-300);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 1024px) {
+  .bb-footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .bb-footer-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .bb-footer-bottom-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,225 @@
+import { useState, type FormEvent } from 'react';
+import { useMarketplace } from '../context/MarketplaceContext.tsx';
+import { useRouter } from '../context/RouterContext.tsx';
+import './AccountProfilePage.css';
+
+export function AccountProfilePage() {
+  const { user, updateUserProfile } = useMarketplace();
+  const { navigate } = useRouter();
+
+  const [fullName, setFullName] = useState(user?.fullName || 'Ananya Sharma');
+  const [email, setEmail] = useState(user?.email || 'ananya.sharma@example.in');
+  const [phone, setPhone] = useState(user?.phone || '+91 98765 43210');
+  const [gender, setGender] = useState(user?.gender || 'Female');
+  const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '1995-08-14');
+  const [isSavedToast, setIsSavedToast] = useState(false);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    updateUserProfile({
+      fullName,
+      email,
+      phone,
+      gender,
+      dateOfBirth,
+    });
+    setIsSavedToast(true);
+    setTimeout(() => setIsSavedToast(false), 3000);
+  };
+
+  const initials = fullName
+    ? fullName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'U';
+
+  return (
+    <div className="bb-container bb-account-container">
+      <div className="bb-account-header">
+        <h1 className="bb-plp-title">Customer Account</h1>
+        <p className="bb-section-subtitle">
+          Manage your personal details, saved shipping addresses, and security settings
+        </p>
+      </div>
+
+      <div className="bb-account-layout">
+        {/* Navigation Sidebar */}
+        <aside className="bb-account-sidebar">
+          <div className="bb-account-user-card">
+            <div className="bb-account-avatar">{initials}</div>
+            <div className="bb-account-user-meta">
+              <div className="bb-account-user-name">{fullName}</div>
+              <div className="bb-account-user-phone">{phone}</div>
+            </div>
+          </div>
+
+          <nav className="bb-account-nav-list" aria-label="Customer account navigation">
+            <button
+              type="button"
+              className="bb-account-nav-item active"
+              onClick={() => navigate('/profile')}
+            >
+              <span className="bb-account-nav-icon">👤</span>
+              Personal Profile
+            </button>
+            <button
+              type="button"
+              className="bb-account-nav-item"
+              onClick={() => navigate('/addresses')}
+            >
+              <span className="bb-account-nav-icon">📍</span>
+              Manage Addresses
+            </button>
+            <button
+              type="button"
+              className="bb-account-nav-item"
+              onClick={() => navigate('/orders')}
+            >
+              <span className="bb-account-nav-icon">📦</span>
+              My Orders & Shipments
+            </button>
+            <button
+              type="button"
+              className="bb-account-nav-item"
+              onClick={() => navigate('/wishlist')}
+            >
+              <span className="bb-account-nav-icon">♡</span>
+              Saved Wishlist
+            </button>
+            <button
+              type="button"
+              className="bb-account-nav-item"
+              onClick={() => navigate('/verify-email')}
+            >
+              <span className="bb-account-nav-icon">🛡️</span>
+              Email Verification
+            </button>
+          </nav>
+        </aside>
+
+        {/* Main Profile Form Panel */}
+        <main className="bb-account-panel">
+          <div className="bb-panel-header">
+            <h2 className="bb-panel-title">Personal Profile Details</h2>
+            <span className="bb-badge bb-badge-primary">Customer Account</span>
+          </div>
+
+          {isSavedToast && (
+            <div className="bb-profile-toast" role="status">
+              <span>✓</span>
+              <span>Profile details updated successfully!</span>
+            </div>
+          )}
+
+          {/* Verification Status Banner */}
+          <div className="bb-profile-status-bar">
+            <div className="bb-profile-status-info">
+              <span>{user?.emailVerified ? '✅' : '⚠️'}</span>
+              <div>
+                <strong>
+                  {user?.emailVerified ? 'Email Verified' : 'Email Not Verified'}
+                </strong>
+                <p className="bb-form-hint">
+                  {user?.emailVerified
+                    ? 'Your account is secured with a verified email address.'
+                    : 'Verify your email to receive order tracking updates and receipts.'}
+                </p>
+              </div>
+            </div>
+            {!user?.emailVerified && (
+              <button
+                type="button"
+                className="bb-btn bb-btn-primary bb-btn-sm"
+                onClick={() => navigate('/verify-email')}
+              >
+                Verify Now →
+              </button>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div className="bb-profile-form-grid">
+              <div className="bb-form-group">
+                <label className="bb-label bb-label-required">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  className="bb-input"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </div>
+
+              <div className="bb-form-group">
+                <label className="bb-label bb-label-required">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  className="bb-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="bb-form-group">
+                <label className="bb-label bb-label-required">Mobile Number</label>
+                <input
+                  type="tel"
+                  required
+                  className="bb-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+
+              <div className="bb-form-group">
+                <label className="bb-label">Gender</label>
+                <select
+                  className="bb-select"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                >
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Other">Other / Prefer not to say</option>
+                </select>
+              </div>
+
+              <div className="bb-form-group">
+                <label className="bb-label">Date of Birth</label>
+                <input
+                  type="date"
+                  className="bb-input"
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="bb-profile-actions">
+              <button type="submit" className="bb-btn bb-btn-primary">
+                Save Profile Changes
+              </button>
+              <button
+                type="button"
+                className="bb-btn bb-btn-secondary"
+                onClick={() => {
+                  setFullName(user?.fullName || '');
+                  setEmail(user?.email || '');
+                  setPhone(user?.phone || '');
+                  setGender(user?.gender || 'Female');
+                  setDateOfBirth(user?.dateOfBirth || '');
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          </form>
+        </main>
+      </div>
+    </div>
+  );
+}

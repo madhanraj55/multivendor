@@ -1,0 +1,53 @@
+/* Home Page Styles */
+
+.bb-home-section {
+  padding: var(--space-10) 0;
+}
+
+.bb-home-section-alt {
+  background-color: var(--color-white);
+  border-top: 1px solid var(--color-slate-200);
+  border-bottom: 1px solid var(--color-slate-200);
+}
+
+.bb-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-6);
+}
+
+.bb-promo-callout {
+  margin: var(--space-8) 0;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.bb-promo-title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-extrabold);
+  color: #78350f;
+  margin-bottom: 4px;
+}
+
+.bb-promo-subtitle {
+  font-size: var(--text-sm);
+  color: #92400e;
+}
+
+@media (max-width: 640px) {
+  .bb-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-3);
+  }
+
+  .bb-promo-callout {
+    padding: var(--space-6);
+  }
+}

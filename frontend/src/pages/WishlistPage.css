@@ -1,0 +1,104 @@
+/* Wishlist Page Styles */
+
+.bb-wishlist-container {
+  padding: var(--space-8) 0 var(--space-16);
+}
+
+.bb-wishlist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.bb-wishlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-6);
+}
+
+.bb-wishlist-card {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.bb-wishlist-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.bb-wishlist-thumb-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background-color: var(--color-slate-100);
+  position: relative;
+  cursor: pointer;
+}
+
+.bb-wishlist-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bb-wishlist-remove-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: var(--color-danger);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-fast);
+}
+
+.bb-wishlist-remove-btn:hover {
+  transform: scale(1.15);
+}
+
+.bb-wishlist-card-body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.bb-wishlist-card-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-slate-900);
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.bb-wishlist-card-title:hover {
+  color: var(--brand-primary);
+}
+
+.bb-wishlist-card-footer {
+  padding: 0 var(--space-4) var(--space-4);
+  margin-top: auto;
+}
+
+@media (max-width: 640px) {
+  .bb-wishlist-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-3);
+  }
+}

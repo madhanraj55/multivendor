@@ -1,0 +1,172 @@
+/* Address Management Page Styles */
+
+.bb-address-container {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.bb-address-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-8);
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.bb-address-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-6);
+}
+
+.bb-address-card {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  position: relative;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.bb-address-card:hover {
+  border-color: var(--brand-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.bb-address-card.default-address {
+  border-color: var(--brand-primary);
+  background: linear-gradient(180deg, #f8faff 0%, var(--color-white) 100%);
+}
+
+.bb-address-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.bb-address-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-slate-900);
+  margin-bottom: var(--space-1);
+}
+
+.bb-address-text {
+  font-size: var(--text-sm);
+  color: var(--color-slate-600);
+  line-height: var(--line-height-relaxed);
+  margin-bottom: var(--space-3);
+}
+
+.bb-address-phone {
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+  margin-bottom: var(--space-5);
+  font-weight: var(--font-weight-medium);
+}
+
+.bb-address-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-slate-100);
+  padding-top: var(--space-4);
+}
+
+/* Modal / Dialog */
+.bb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.bb-modal-card {
+  background-color: var(--color-white);
+  border-radius: var(--radius-2xl);
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-8);
+  animation: modalPop 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.bb-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.bb-modal-close {
+  font-size: 1.25rem;
+  color: var(--color-slate-400);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+}
+
+.bb-modal-close:hover {
+  color: var(--color-slate-800);
+}
+
+.bb-address-type-selector {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.bb-address-type-btn {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-slate-300);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  background-color: var(--color-white);
+  color: var(--color-slate-700);
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--transition-fast);
+}
+
+.bb-address-type-btn.active {
+  border-color: var(--brand-primary);
+  background-color: var(--brand-primary-subtle);
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.bb-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-slate-700);
+}
