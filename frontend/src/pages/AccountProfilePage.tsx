@@ -13,19 +13,30 @@ export function AccountProfilePage() {
   const [gender, setGender] = useState(user?.gender || 'Female');
   const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '1995-08-14');
   const [isSavedToast, setIsSavedToast] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    updateUserProfile({
-      fullName,
-      email,
-      phone,
-      gender,
-      dateOfBirth,
-    });
-    setIsSavedToast(true);
-    setTimeout(() => setIsSavedToast(false), 3000);
+    setProfileError(null);
+    setIsSaving(true);
+    try {
+      await updateUserProfile({
+        fullName,
+        email,
+        phone,
+        gender,
+        dateOfBirth,
+      });
+      setIsSavedToast(true);
+      setTimeout(() => setIsSavedToast(false), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update profile.';
+      setProfileError(msg);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -142,6 +153,12 @@ export function AccountProfilePage() {
             </div>
           )}
 
+          {profileError && (
+            <div className="bb-badge bb-badge-danger bb-btn-block" style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3)' }} role="alert">
+              ⚠️ {profileError}
+            </div>
+          )}
+
           {/* Verification Status Banner */}
           <div className="bb-profile-status-bar">
             <div className="bb-profile-status-info">
@@ -231,8 +248,12 @@ export function AccountProfilePage() {
             </div>
 
             <div className="bb-profile-actions">
-              <button type="submit" className="bb-btn bb-btn-primary">
-                Save Profile Changes
+              <button
+                type="submit"
+                disabled={isSaving}
+                className={`bb-btn bb-btn-primary ${isSaving ? 'bb-btn-loading' : ''}`}
+              >
+                {isSaving ? 'Saving Changes...' : 'Save Profile Changes'}
               </button>
               <button
                 type="button"
@@ -243,6 +264,7 @@ export function AccountProfilePage() {
                   setPhone(user?.phone || '');
                   setGender(user?.gender || 'Female');
                   setDateOfBirth(user?.dateOfBirth || '');
+                  setProfileError(null);
                 }}
               >
                 Reset

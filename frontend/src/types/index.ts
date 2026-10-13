@@ -213,3 +213,63 @@ export interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
 }
+
+export interface BackendAddress {
+  id: string;
+  userId: string;
+  addressType: 'SHIPPING' | 'BILLING' | 'SHOP_PICKUP';
+  fullName: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string | null;
+  landmark?: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  isDefault: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateAddressPayload {
+  addressType?: 'SHIPPING' | 'BILLING' | 'SHOP_PICKUP';
+  fullName: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  landmark?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  isDefault?: boolean;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface UpdateAddressPayload {
+  addressType?: 'SHIPPING' | 'BILLING' | 'SHOP_PICKUP';
+  fullName?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  landmark?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  isDefault?: boolean;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface SetDefaultAddressResponse {
+  message: string;
+  address: BackendAddress;
+}
+
+export interface DeleteAddressResponse {
+  message: string;
+  deletedId: string;
+  replacementDefaultId: string | null;
+}

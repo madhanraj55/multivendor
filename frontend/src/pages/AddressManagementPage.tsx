@@ -1,12 +1,21 @@
 import { useState, type FormEvent } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import type { Address } from '../types/index.ts';
-import { EmptyState } from '../components/common/StateViews.tsx';
+import { EmptyState, LoadingSpinner } from '../components/common/StateViews.tsx';
 import './AddressManagementPage.css';
 
 export function AddressManagementPage() {
-  const { addresses, addAddress, updateAddress, deleteAddress, setDefaultAddress } =
-    useMarketplace();
+  const {
+    addresses,
+    addressesLoading,
+    addressesError,
+    fetchAddresses,
+    addAddress,
+    updateAddress,
+    deleteAddress,
+    setDefaultAddress,
+    authMode,
+  } = useMarketplace();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
@@ -22,6 +31,11 @@ export function AddressManagementPage() {
   const [pincode, setPincode] = useState('');
   const [isDefault, setIsDefault] = useState(false);
 
+  // Feedback states
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const openAddModal = () => {
     setEditingAddressId(null);
     setName('');
@@ -33,6 +47,7 @@ export function AddressManagementPage() {
     setState('Karnataka');
     setPincode('560038');
     setIsDefault(addresses.length === 0);
+    setActionError(null);
     setIsModalOpen(true);
   };
 
@@ -47,38 +62,89 @@ export function AddressManagementPage() {
     setState(addr.state);
     setPincode(addr.pincode);
     setIsDefault(addr.isDefault);
+    setActionError(null);
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (editingAddressId) {
-      updateAddress({
-        id: editingAddressId,
-        name,
-        phone,
-        type,
-        street,
-        locality,
-        city,
-        state,
-        pincode,
-        isDefault,
-      });
-    } else {
-      addAddress({
-        name,
-        phone,
-        type,
-        street,
-        locality,
-        city,
-        state,
-        pincode,
-        isDefault,
-      });
+    setActionError(null);
+
+    // Client-side validations adhering to backend constraints
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setActionError('Phone number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+      return;
     }
-    setIsModalOpen(false);
+
+    const cleanPin = pincode.trim();
+    if (!/^[1-9][0-9]{5}$/.test(cleanPin)) {
+      setActionError('Postal code must be a valid 6-digit Indian PIN code.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (editingAddressId) {
+        await updateAddress({
+          id: editingAddressId,
+          name,
+          phone: cleanPhone,
+          type,
+          street,
+          locality,
+          city,
+          state,
+          pincode: cleanPin,
+          isDefault,
+        });
+        setActionSuccess('Address updated successfully!');
+      } else {
+        await addAddress({
+          name,
+          phone: cleanPhone,
+          type,
+          street,
+          locality,
+          city,
+          state,
+          pincode: cleanPin,
+          isDefault,
+        });
+        setActionSuccess('New address saved successfully!');
+      }
+      setIsModalOpen(false);
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save address.';
+      setActionError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSetDefault = async (id: string) => {
+    setActionError(null);
+    try {
+      await setDefaultAddress(id);
+      setActionSuccess('Default address updated.');
+      setTimeout(() => setActionSuccess(null), 2500);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to set default address.');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Delete this address?')) {
+      setActionError(null);
+      try {
+        await deleteAddress(id);
+        setActionSuccess('Address deleted.');
+        setTimeout(() => setActionSuccess(null), 2500);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Failed to delete address.');
+      }
+    }
   };
 
   return (
@@ -99,11 +165,49 @@ export function AddressManagementPage() {
         </button>
       </div>
 
-      {addresses.length === 0 ? (
+      {actionSuccess && (
+        <div className="bb-badge bb-badge-success bb-btn-block bb-address-feedback-banner" role="status">
+          ✓ {actionSuccess}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="bb-badge bb-badge-danger bb-btn-block bb-address-feedback-banner" role="alert">
+          ⚠️ {actionError}
+        </div>
+      )}
+
+      {addressesError && (
+        <div className="bb-badge bb-badge-danger bb-btn-block bb-address-feedback-banner" role="alert">
+          ⚠️ {addressesError}
+          <div className="bb-address-retry-row">
+            <button
+              type="button"
+              className="bb-btn bb-btn-secondary bb-btn-sm"
+              onClick={fetchAddresses}
+            >
+              Retry Loading Addresses
+            </button>
+          </div>
+        </div>
+      )}
+
+      {addressesLoading ? (
+        <div style={{ padding: 'var(--space-8) 0', textAlign: 'center' }}>
+          <LoadingSpinner />
+          <p style={{ marginTop: 'var(--space-2)', color: 'var(--color-slate-500)' }}>
+            Retrieving your saved addresses...
+          </p>
+        </div>
+      ) : addresses.length === 0 ? (
         <EmptyState
           icon="📍"
           title="No Saved Addresses"
-          description="You haven't added any shipping addresses yet. Add one to enable seamless one-click checkout."
+          description={
+            authMode === 'AUTHENTICATED'
+              ? "You haven't saved any delivery addresses to your account yet. Add an address to proceed smoothly through checkout."
+              : "You haven't added any shipping addresses yet. Add one to enable seamless one-click checkout."
+          }
           actionText="+ Add Address"
           onAction={openAddModal}
         />
@@ -124,7 +228,7 @@ export function AddressManagementPage() {
 
                 <h3 className="bb-address-name">{addr.name}</h3>
                 <p className="bb-address-text">
-                  {addr.street}, {addr.locality}, {addr.city}, {addr.state} -{' '}
+                  {addr.street}, {addr.locality ? `${addr.locality}, ` : ''}{addr.city}, {addr.state} -{' '}
                   <strong>{addr.pincode}</strong>
                 </p>
                 <div className="bb-address-phone">📞 Phone: {addr.phone}</div>
@@ -142,24 +246,18 @@ export function AddressManagementPage() {
                   <button
                     type="button"
                     className="bb-btn bb-btn-outline bb-btn-sm"
-                    onClick={() => setDefaultAddress(addr.id)}
+                    onClick={() => handleSetDefault(addr.id)}
                   >
                     Set as Default
                   </button>
                 )}
-                {addresses.length > 1 && (
-                  <button
-                    type="button"
-                    className="bb-btn bb-btn-ghost bb-btn-sm"
-                    onClick={() => {
-                      if (confirm('Delete this address?')) {
-                        deleteAddress(addr.id);
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-ghost bb-btn-sm"
+                  onClick={() => handleDelete(addr.id)}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
@@ -245,10 +343,9 @@ export function AddressManagementPage() {
               </div>
 
               <div className="bb-form-group">
-                <label className="bb-label bb-label-required">Area / Locality / Landmark</label>
+                <label className="bb-label">Area / Locality / Landmark</label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. Indiranagar, Near Metro Station"
                   className="bb-input"
                   value={locality}
@@ -310,9 +407,10 @@ export function AddressManagementPage() {
               <div className="bb-auth-action-row">
                 <button
                   type="submit"
-                  className="bb-btn bb-btn-primary bb-btn-block"
+                  disabled={isSubmitting}
+                  className={`bb-btn bb-btn-primary bb-btn-block ${isSubmitting ? 'bb-btn-loading' : ''}`}
                 >
-                  {editingAddressId ? 'Update Address' : 'Save Address'}
+                  {isSubmitting ? 'Saving...' : editingAddressId ? 'Update Address' : 'Save Address'}
                 </button>
                 <button
                   type="button"

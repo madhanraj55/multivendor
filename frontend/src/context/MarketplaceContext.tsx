@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type {
   Product,
   CartItem,
@@ -17,6 +17,12 @@ import {
 } from '../data/demoData.ts';
 import { sessionManager } from '../services/apiClient.ts';
 import { authApi } from '../services/authApi.ts';
+import {
+  addressesApi,
+  mapBackendAddressToUi,
+  mapUiAddressToCreatePayload,
+  mapUiAddressToUpdatePayload,
+} from '../services/addressesApi.ts';
 
 interface MarketplaceContextValue {
   cart: CartItem[];
@@ -33,7 +39,7 @@ interface MarketplaceContextValue {
 
   user: UserProfile | null;
   setUser: (user: UserProfile | null) => void;
-  updateUserProfile: (profile: Partial<UserProfile>) => void;
+  updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>;
 
   authMode: AuthMode;
   authUser: AuthUser | null;
@@ -43,10 +49,13 @@ interface MarketplaceContextValue {
   logout: () => Promise<void>;
 
   addresses: Address[];
-  addAddress: (address: Omit<Address, 'id'>) => void;
-  updateAddress: (address: Address) => void;
-  deleteAddress: (id: string) => void;
-  setDefaultAddress: (id: string) => void;
+  addressesLoading: boolean;
+  addressesError: string | null;
+  fetchAddresses: () => Promise<void>;
+  addAddress: (address: Omit<Address, 'id'>) => Promise<void>;
+  updateAddress: (address: Address) => Promise<void>;
+  deleteAddress: (id: string) => Promise<void>;
+  setDefaultAddress: (id: string) => Promise<void>;
   selectedAddressId: string;
   setSelectedAddressId: (id: string) => void;
 
@@ -166,6 +175,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setAuthMode('DEMO');
     setAuthUser(null);
     setUser(DEMO_USER);
+    setAddresses(DEMO_ADDRESSES);
+    setSelectedAddressId(DEMO_ADDRESSES[0]?.id || '');
+    setAddressesLoading(false);
+    setAddressesError(null);
   };
 
   const setAnonymousAuth = () => {
@@ -173,6 +186,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setAuthMode('ANONYMOUS');
     setAuthUser(null);
     setUser(null);
+    setAddresses([]);
+    setSelectedAddressId('');
+    setAddressesLoading(false);
+    setAddressesError(null);
   };
 
   const logout = async () => {
@@ -188,13 +205,79 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setAuthMode('ANONYMOUS');
     setAuthUser(null);
     setUser(null);
+    setAddresses([]);
+    setSelectedAddressId('');
+    setAddressesLoading(false);
+    setAddressesError(null);
   };
 
-  const [addresses, setAddresses] = useState<Address[]>(DEMO_ADDRESSES);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>(DEMO_ADDRESSES[0].id);
+  const [addresses, setAddresses] = useState<Address[]>(() => {
+    return sessionManager.getSession() ? [] : DEMO_ADDRESSES;
+  });
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressesError, setAddressesError] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>(() => {
+    return sessionManager.getSession() ? '' : DEMO_ADDRESSES[0].id;
+  });
   const [orders, setOrders] = useState<Order[]>(DEMO_ORDERS);
   const [pincode, setPincode] = useState<string>('560038');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const fetchAddresses = useCallback(async () => {
+    if (authMode !== 'AUTHENTICATED') {
+      setAddresses(DEMO_ADDRESSES);
+      setSelectedAddressId(DEMO_ADDRESSES[0]?.id || '');
+      setAddressesLoading(false);
+      setAddressesError(null);
+      return;
+    }
+
+    setAddressesLoading(true);
+    setAddressesError(null);
+    try {
+      const backendAddrs = await addressesApi.getAddresses();
+      const uiAddrs = backendAddrs.map(mapBackendAddressToUi);
+      setAddresses(uiAddrs);
+      const defaultAddr = uiAddrs.find((a) => a.isDefault) || uiAddrs[0];
+      if (defaultAddr) {
+        setSelectedAddressId(defaultAddr.id);
+      } else {
+        setSelectedAddressId('');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load addresses from server';
+      setAddressesError(message);
+    } finally {
+      setAddressesLoading(false);
+    }
+  }, [authMode]);
+
+  // Synchronize address list whenever authMode changes via external effect
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (authMode === 'AUTHENTICATED') {
+      addressesApi
+        .getAddresses()
+        .then((backendAddrs) => {
+          if (isCancelled) return;
+          const uiAddrs = backendAddrs.map(mapBackendAddressToUi);
+          setAddresses(uiAddrs);
+          const defaultAddr = uiAddrs.find((a) => a.isDefault) || uiAddrs[0];
+          setSelectedAddressId(defaultAddr ? defaultAddr.id : '');
+          setAddressesLoading(false);
+        })
+        .catch((err) => {
+          if (isCancelled) return;
+          setAddressesError(err instanceof Error ? err.message : 'Failed to load addresses from server');
+          setAddressesLoading(false);
+        });
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authMode]);
 
   const addToCart = (
     product: Product,
@@ -261,13 +344,41 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const isInWishlist = (productId: string) => wishlist.includes(productId);
 
-  const updateUserProfile = (profile: Partial<UserProfile>) => {
+  const updateUserProfile = async (profile: Partial<UserProfile>) => {
     if (user) {
       setUser({ ...user, ...profile });
     }
+    if (authMode === 'AUTHENTICATED' && authUser) {
+      let firstName = authUser.firstName;
+      let lastName = authUser.lastName;
+      if (profile.fullName) {
+        const parts = profile.fullName.trim().split(' ');
+        firstName = parts[0] || authUser.firstName;
+        lastName = parts.slice(1).join(' ') || authUser.lastName;
+      }
+      const phoneDigits = profile.phone ? profile.phone.replace(/\D/g, '').slice(-10) : undefined;
+      const res = await authApi.updateProfile({
+        firstName,
+        lastName,
+        phone: phoneDigits || undefined,
+      });
+      setAuthUser(res.user);
+    }
   };
 
-  const addAddress = (addr: Omit<Address, 'id'>) => {
+  const addAddress = async (addr: Omit<Address, 'id'>) => {
+    if (authMode === 'AUTHENTICATED') {
+      const payload = mapUiAddressToCreatePayload(addr);
+      const created = await addressesApi.createAddress(payload);
+      const uiAddr = mapBackendAddressToUi(created);
+      await fetchAddresses();
+      if (uiAddr.isDefault) {
+        setSelectedAddressId(uiAddr.id);
+      }
+      return;
+    }
+
+    // Demo Mode in-memory creation
     const newAddr: Address = {
       ...addr,
       id: `addr-${Date.now()}`,
@@ -280,7 +391,15 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateAddress = (updated: Address) => {
+  const updateAddress = async (updated: Address) => {
+    if (authMode === 'AUTHENTICATED') {
+      const payload = mapUiAddressToUpdatePayload(updated);
+      await addressesApi.updateAddress(updated.id, payload);
+      await fetchAddresses();
+      return;
+    }
+
+    // Demo Mode in-memory update
     setAddresses((prev) =>
       prev.map((a) => {
         if (a.id === updated.id) {
@@ -294,7 +413,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const deleteAddress = (id: string) => {
+  const deleteAddress = async (id: string) => {
+    if (authMode === 'AUTHENTICATED') {
+      await addressesApi.deleteAddress(id);
+      await fetchAddresses();
+      return;
+    }
+
+    // Demo Mode in-memory deletion
     setAddresses((prev) => prev.filter((a) => a.id !== id));
     if (selectedAddressId === id) {
       const remaining = addresses.filter((a) => a.id !== id);
@@ -304,7 +430,15 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const setDefaultAddress = (id: string) => {
+  const setDefaultAddress = async (id: string) => {
+    if (authMode === 'AUTHENTICATED') {
+      await addressesApi.setDefaultAddress(id);
+      await fetchAddresses();
+      setSelectedAddressId(id);
+      return;
+    }
+
+    // Demo Mode in-memory default toggle
     setAddresses((prev) =>
       prev.map((a) => ({
         ...a,
@@ -385,6 +519,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         setAnonymousAuth,
         logout,
         addresses,
+        addressesLoading,
+        addressesError,
+        fetchAddresses,
         addAddress,
         updateAddress,
         deleteAddress,
