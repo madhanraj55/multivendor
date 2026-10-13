@@ -108,6 +108,17 @@
   font-size: 1.15rem;
 }
 
+.bb-account-logout-btn {
+  color: var(--color-danger);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-slate-100);
+}
+
+.bb-account-logout-btn:hover {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
 /* Main Content Panel */
 .bb-account-panel {
   background-color: var(--color-white);

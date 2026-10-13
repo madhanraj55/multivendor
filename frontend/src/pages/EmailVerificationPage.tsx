@@ -1,74 +1,88 @@
-import { useState, useRef, type ChangeEvent, type KeyboardEvent, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from '../context/RouterContext.tsx';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
+import { authApi } from '../services/authApi.ts';
+import { ApiError } from '../services/apiClient.ts';
 import './EmailVerificationPage.css';
 
 export function EmailVerificationPage() {
   const { navigate } = useRouter();
-  const { user, updateUserProfile } = useMarketplace();
+  const { user, authMode, updateUserProfile } = useMarketplace();
 
-  const [otp, setOtp] = useState(['5', '6', '0', '', '', '']);
+  const [tokenInput, setTokenInput] = useState('');
+  const [devToken, setDevToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined' && import.meta.env.DEV) {
+      try {
+        return sessionStorage.getItem('bb_dev_verification_token');
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const [isVerified, setIsVerified] = useState(user?.emailVerified || false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  const handleOtpChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '');
-    const newOtp = [...otp];
-    newOtp[index] = val.slice(-1);
-    setOtp(newOtp);
-    setErrorMsg('');
-
-    // Focus next box if filled
-    if (val && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = (e: FormEvent) => {
+  const handleVerify = async (e: FormEvent) => {
     e.preventDefault();
-    const code = otp.join('');
-    if (code.length < 6) {
-      setErrorMsg('Please enter all 6 digits of your verification code.');
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const token = tokenInput.trim();
+    if (!token) {
+      setErrorMsg('Please enter your email verification token.');
       return;
     }
 
-    // Demo verification success
+    if (authMode === 'DEMO') {
+      // Demo preview mode
+      setIsVerified(true);
+      updateUserProfile({ emailVerified: true });
+      setSuccessMsg('Email verified in Demo Mode.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await authApi.verifyEmail({ token });
+      setIsVerified(true);
+      setSuccessMsg(response.message || 'Email verified successfully. You can now log in.');
+
+      // Clear dev token from storage
+      if (import.meta.env.DEV) {
+        try {
+          sessionStorage.removeItem('bb_dev_verification_token');
+          setDevToken(null);
+        } catch {
+          // Cleanup fallback
+        }
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorMsg(err.messages.join('. '));
+      } else {
+        setErrorMsg('Verification failed. The token may be expired or invalid.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoFillDevToken = () => {
+    if (devToken) {
+      setTokenInput(devToken);
+      setErrorMsg('');
+    }
+  };
+
+  const handleDemoPreview = () => {
     setIsVerified(true);
     updateUserProfile({ emailVerified: true });
   };
 
-  const handleResend = () => {
-    setOtp(['', '', '', '', '', '']);
-    setResendCooldown(30);
-    setErrorMsg('');
-    inputRefs.current[0]?.focus();
-
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const handleFillDemoCode = () => {
-    setOtp(['5', '6', '0', '0', '3', '8']);
-    setErrorMsg('');
-  };
-
-  const displayEmail = user?.email || 'ananya.sharma@example.in';
+  const displayEmail = user?.email || 'your registered email';
 
   return (
     <div className="bb-verify-container">
@@ -78,22 +92,23 @@ export function EmailVerificationPage() {
             <div className="bb-verify-icon">✓</div>
             <h2 className="bb-verify-title">Email Verified!</h2>
             <p className="bb-verify-desc">
-              Your email <strong>{displayEmail}</strong> is now verified. You have full access to marketplace features, order tracking, and express checkout.
+              Your email <strong>{displayEmail}</strong> is now verified on BharatBazaar. You can now log in to access your orders, saved addresses, and express checkout.
             </p>
+            {successMsg && <p className="bb-input-hint valid">{successMsg}</p>}
             <div className="bb-auth-action-row">
               <button
                 type="button"
                 className="bb-btn bb-btn-primary bb-btn-block"
-                onClick={() => navigate('/profile')}
+                onClick={() => navigate('/login')}
               >
-                Go to Profile
+                Sign In to Account
               </button>
               <button
                 type="button"
                 className="bb-btn bb-btn-outline bb-btn-block"
                 onClick={() => navigate('/')}
               >
-                Start Shopping
+                Return to Storefront
               </button>
             </div>
           </div>
@@ -102,59 +117,56 @@ export function EmailVerificationPage() {
             <div className="bb-verify-icon">✉️</div>
             <h1 className="bb-verify-title">Verify Your Email</h1>
             <p className="bb-verify-desc">
-              We sent a 6-digit confirmation code to:
+              Please enter the secure verification token sent to:
             </p>
             <div>
               <span className="bb-verify-email-chip">{displayEmail}</span>
             </div>
 
-            <div className="bb-verify-demo-note">
-              ℹ️ <strong>Demo Simulation:</strong> Enter any 6 digits (or use the demo button below) to preview successful email verification.
-            </div>
+            {/* Development-only Token Helper (Stripped from production) */}
+            {import.meta.env.DEV && devToken && (
+              <div className="bb-verify-dev-card" role="region" aria-label="Development verification helper">
+                <strong>🛠️ Development Environment Helper</strong>
+                <p>The backend generated a verification token for this session:</p>
+                <code className="bb-verify-dev-token-code">{devToken}</code>
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-secondary bb-btn-sm"
+                  onClick={handleAutoFillDevToken}
+                >
+                  Auto-fill Token
+                </button>
+              </div>
+            )}
 
             {errorMsg && (
-              <div className="bb-badge bb-badge-danger bb-btn-block bb-auth-error-banner">
+              <div className="bb-badge bb-badge-danger bb-btn-block bb-auth-error-banner" role="alert">
                 ⚠️ {errorMsg}
               </div>
             )}
 
             <form onSubmit={handleVerify}>
-              <div className="bb-otp-group">
-                {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => {
-                      inputRefs.current[i] = el;
-                    }}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    className="bb-otp-input"
-                    value={digit}
-                    onChange={(e) => handleOtpChange(i, e)}
-                    onKeyDown={(e) => handleKeyDown(i, e)}
-                    aria-label={`Digit ${i + 1}`}
-                  />
-                ))}
-              </div>
-
-              <div className="bb-verify-resend-row">
-                <span>Didn't receive the code?</span>
-                <button
-                  type="button"
-                  className="bb-verify-resend-btn"
-                  onClick={handleResend}
-                  disabled={resendCooldown > 0}
-                >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
-                </button>
+              <div className="bb-verify-token-field">
+                <label className="bb-label bb-label-required">Verification Token</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Paste your 64-character verification token"
+                  className="bb-verify-token-input"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                />
+                <p className="bb-input-hint">
+                  Tokens are valid for 24 hours from registration.
+                </p>
               </div>
 
               <button
                 type="submit"
-                className="bb-btn bb-btn-primary bb-btn-block bb-btn-lg"
+                disabled={isSubmitting}
+                className={`bb-btn bb-btn-primary bb-btn-block bb-btn-lg ${isSubmitting ? 'bb-btn-loading' : ''}`}
               >
-                Verify & Activate Account
+                {isSubmitting ? 'Verifying...' : 'Verify & Activate Account'}
               </button>
             </form>
 
@@ -162,9 +174,16 @@ export function EmailVerificationPage() {
               <button
                 type="button"
                 className="bb-btn bb-btn-secondary bb-btn-sm bb-btn-block"
-                onClick={handleFillDemoCode}
+                onClick={handleDemoPreview}
               >
-                Auto-Fill Demo Code (560038)
+                Preview in Demo Mode
+              </button>
+              <button
+                type="button"
+                className="bb-btn bb-btn-outline bb-btn-sm bb-btn-block"
+                onClick={() => navigate('/login')}
+              >
+                Back to Sign In
               </button>
             </div>
           </>

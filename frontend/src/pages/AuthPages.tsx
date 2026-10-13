@@ -1,26 +1,36 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from '../context/RouterContext.tsx';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
-import { DEMO_USER } from '../data/demoData.ts';
+import { authApi } from '../services/authApi.ts';
+import { ApiError } from '../services/apiClient.ts';
 import './AuthPages.css';
+
+const PASSWORD_REGEX = /((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/;
+const INDIAN_PHONE_REGEX = /^[6-9]\d{9}$/;
 
 export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | 'register' }) {
   const { navigate } = useRouter();
-  const { user, setUser } = useMarketplace();
+  const { user, authMode, setAuthenticatedSession, setDemoAuth, logout } = useMarketplace();
 
   const [mode, setMode] = useState<'login' | 'register'>(defaultMode);
 
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const isPasswordStrong = password.length >= 8 && PASSWORD_REGEX.test(password);
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFormError('');
+    setFormSuccess('');
 
     if (!email || !password) {
       setFormError('Please fill in all required fields.');
@@ -28,32 +38,100 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
     }
 
     if (mode === 'register') {
-      if (!fullName || !phone) {
-        setFormError('Please enter your full name and Indian mobile number.');
+      if (!firstName.trim() || !lastName.trim()) {
+        setFormError('First name and last name are both required.');
         return;
       }
-      if (!/^\d{10}$/.test(phone.replace(/\D/g, ''))) {
-        setFormError('Please enter a valid 10-digit Indian phone number.');
+
+      if (phone && !INDIAN_PHONE_REGEX.test(phone.trim())) {
+        setFormError('Phone number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
         return;
       }
-      // Demo registration success, navigate to verify-email
-      navigate('/verify-email');
+
+      if (password.length < 8) {
+        setFormError('Password must be at least 8 characters long.');
+        return;
+      }
+
+      if (!PASSWORD_REGEX.test(password)) {
+        setFormError('Password must contain at least 1 uppercase letter, 1 lowercase letter, and 1 number or special character.');
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const response = await authApi.register({
+          email: email.trim().toLowerCase(),
+          password,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phone: phone.trim() || undefined,
+          role: 'CUSTOMER',
+        });
+
+        // If backend returned a dev verification token (non-production), save to sessionStorage for dev testing
+        if (import.meta.env.DEV && response.devVerificationToken) {
+          try {
+            sessionStorage.setItem('bb_dev_verification_token', response.devVerificationToken);
+          } catch {
+            // Storage quota fallback
+          }
+        }
+
+        setFormSuccess(response.message || 'Registration successful! Please verify your email.');
+        setTimeout(() => {
+          navigate('/verify-email');
+        }, 1200);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setFormError(err.messages.join('. '));
+        } else {
+          setFormError('Failed to register. Please check your network connection.');
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
 
-    // Demo login
-    setUser({
-      ...DEMO_USER,
-      email: email || DEMO_USER.email,
-    });
-    navigate('/profile');
+    // Login mode
+    setIsSubmitting(true);
+    try {
+      const response = await authApi.login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      setAuthenticatedSession({
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+        user: response.user,
+      });
+
+      navigate('/profile');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setFormError(err.messages.join('. '));
+      } else {
+        setFormError('Login failed. Please verify your credentials.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDemoFill = () => {
-    setEmail('ananya.sharma@example.in');
+  const handleFillSampleInputs = () => {
+    setEmail('aarav.patel@example.com');
     setPassword('SecurePass123!');
-    setFullName('Ananya Sharma');
+    setFirstName('Aarav');
+    setLastName('Patel');
     setPhone('9876543210');
+    setFormError('');
+  };
+
+  const handleActivateDemoMode = () => {
+    setDemoAuth();
+    navigate('/profile');
   };
 
   return (
@@ -66,14 +144,16 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
           </h1>
           <p className="bb-auth-subtitle">
             {mode === 'login'
-              ? 'Sign in to access your orders, wishlist, and saved addresses'
+              ? 'Sign in with your registered account credentials'
               : 'Join BharatBazaar to shop from authentic Indian merchants'}
           </p>
         </div>
 
-        {/* Demo Notice */}
+        {/* Current Auth Mode Badge */}
         <div className="bb-auth-demo-badge">
-          ℹ️ <strong>Demo Prototype:</strong> Real authentication will connect to the NestJS Auth API in the next phase. Click "Auto-Fill Demo Credentials" to preview without typing.
+          🛡️ <strong>Authentication Mode:</strong> Currently in{' '}
+          <strong>{authMode === 'AUTHENTICATED' ? 'Live Backend Session' : authMode === 'DEMO' ? 'Demo Mode' : 'Anonymous Mode'}</strong>.
+          Real sign-ins authenticate against <code>/api/v1/auth</code>.
         </div>
 
         {/* Tab switch */}
@@ -84,6 +164,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
             onClick={() => {
               setMode('login');
               setFormError('');
+              setFormSuccess('');
             }}
           >
             Sign In
@@ -94,6 +175,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
             onClick={() => {
               setMode('register');
               setFormError('');
+              setFormSuccess('');
             }}
           >
             New Registration
@@ -101,8 +183,14 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
         </div>
 
         {formError && (
-          <div className="bb-badge bb-badge-danger bb-btn-block bb-auth-error-banner">
+          <div className="bb-badge bb-badge-danger bb-btn-block bb-auth-error-banner" role="alert">
             ⚠️ {formError}
+          </div>
+        )}
+
+        {formSuccess && (
+          <div className="bb-badge bb-badge-success bb-btn-block bb-auth-error-banner" role="status">
+            ✓ {formSuccess}
           </div>
         )}
 
@@ -110,29 +198,42 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
         <form onSubmit={handleSubmit}>
           {mode === 'register' && (
             <>
-              <div className="bb-form-group">
-                <label className="bb-label bb-label-required">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ananya Sharma"
-                  className="bb-input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
+              <div className="bb-form-grid-2">
+                <div className="bb-form-group">
+                  <label className="bb-label bb-label-required">First Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Aarav"
+                    className="bb-input"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </div>
+                <div className="bb-form-group">
+                  <label className="bb-label bb-label-required">Last Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Patel"
+                    className="bb-input"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="bb-form-group">
-                <label className="bb-label bb-label-required">Mobile Number (+91)</label>
+                <label className="bb-label">Mobile Number (+91)</label>
                 <input
                   type="tel"
-                  required
                   maxLength={10}
-                  placeholder="10-digit mobile number"
+                  placeholder="10-digit Indian mobile number (e.g. 9876543210)"
                   className="bb-input"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
+                <p className="bb-input-hint">Optional. Must start with 6, 7, 8, or 9 if provided.</p>
               </div>
             </>
           )}
@@ -156,7 +257,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
                 <button
                   type="button"
                   className="bb-auth-forgot-link"
-                  onClick={() => alert('Demo password reset link simulated to your email.')}
+                  onClick={() => alert('Password reset service will be configured with the transactional email gateway.')}
                 >
                   Forgot password?
                 </button>
@@ -180,10 +281,25 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
                 {showPassword ? '🙈' : '👁️'}
               </button>
             </div>
+            {mode === 'register' && (
+              <p className={`bb-input-hint ${isPasswordStrong ? 'valid' : ''}`}>
+                {isPasswordStrong
+                  ? '✓ Password meets complexity standards'
+                  : 'Must be 8+ characters with uppercase, lowercase, and number or special symbol.'}
+              </p>
+            )}
           </div>
 
-          <button type="submit" className="bb-btn bb-btn-primary bb-btn-block bb-btn-lg">
-            {mode === 'login' ? 'Sign In' : 'Continue to Email Verification →'}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`bb-btn bb-btn-primary bb-btn-block bb-btn-lg ${isSubmitting ? 'bb-btn-loading' : ''}`}
+          >
+            {isSubmitting
+              ? 'Connecting to Server...'
+              : mode === 'login'
+                ? 'Sign In'
+                : 'Register & Continue to Verification →'}
           </button>
         </form>
 
@@ -191,23 +307,33 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
           <button
             type="button"
             className="bb-btn bb-btn-secondary bb-btn-sm bb-btn-block"
-            onClick={handleDemoFill}
+            onClick={handleFillSampleInputs}
           >
-            Auto-Fill Demo Credentials
+            Fill Sample Values
           </button>
-          {user && (
+          <button
+            type="button"
+            className="bb-btn bb-btn-outline bb-btn-sm bb-btn-block"
+            onClick={handleActivateDemoMode}
+          >
+            Browse in Demo Mode
+          </button>
+        </div>
+
+        {user && (
+          <div className="bb-auth-action-row">
             <button
               type="button"
-              className="bb-btn bb-btn-ghost bb-btn-sm"
-              onClick={() => {
-                setUser(null);
-                alert('Signed out of demo session');
+              className="bb-btn bb-btn-ghost bb-btn-sm bb-btn-block"
+              onClick={async () => {
+                await logout();
+                alert('Session cleared.');
               }}
             >
-              Sign Out
+              Sign Out Active Session
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         <p className="bb-terms-text">
           By continuing, you agree to BharatBazaar’s Terms of Use and Privacy Policy.

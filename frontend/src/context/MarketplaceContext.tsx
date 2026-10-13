@@ -1,10 +1,13 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type {
   Product,
   CartItem,
   Address,
   Order,
   UserProfile,
+  AuthUser,
+  AuthMode,
+  AuthSession,
 } from '../types/index.ts';
 import {
   DEMO_PRODUCTS,
@@ -12,6 +15,8 @@ import {
   DEMO_ORDERS,
   DEMO_USER,
 } from '../data/demoData.ts';
+import { sessionManager } from '../services/apiClient.ts';
+import { authApi } from '../services/authApi.ts';
 
 interface MarketplaceContextValue {
   cart: CartItem[];
@@ -29,6 +34,13 @@ interface MarketplaceContextValue {
   user: UserProfile | null;
   setUser: (user: UserProfile | null) => void;
   updateUserProfile: (profile: Partial<UserProfile>) => void;
+
+  authMode: AuthMode;
+  authUser: AuthUser | null;
+  setAuthenticatedSession: (session: AuthSession) => void;
+  setDemoAuth: () => void;
+  setAnonymousAuth: () => void;
+  logout: () => Promise<void>;
 
   addresses: Address[];
   addAddress: (address: Omit<Address, 'id'>) => void;
@@ -80,7 +92,104 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     DEMO_PRODUCTS[4].id,
   ]);
 
-  const [user, setUser] = useState<UserProfile | null>(DEMO_USER);
+  // Auth state: check if an active authenticated backend session exists
+  const [authMode, setAuthMode] = useState<AuthMode>(() => {
+    return sessionManager.getSession() ? 'AUTHENTICATED' : 'DEMO';
+  });
+
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    return sessionManager.getSession()?.user ?? null;
+  });
+
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    const existing = sessionManager.getSession();
+    if (existing?.user) {
+      return {
+        id: existing.user.id,
+        fullName: `${existing.user.firstName} ${existing.user.lastName}`.trim(),
+        email: existing.user.email,
+        phone: existing.user.phone || '',
+        gender: '',
+        dateOfBirth: '',
+        emailVerified: Boolean(existing.user.isEmailVerified),
+      };
+    }
+    return DEMO_USER;
+  });
+
+  useEffect(() => {
+    const unsubscribe = sessionManager.subscribe((session) => {
+      if (session) {
+        setAuthMode('AUTHENTICATED');
+        setAuthUser(session.user);
+        setUser({
+          id: session.user.id,
+          fullName: `${session.user.firstName} ${session.user.lastName}`.trim(),
+          email: session.user.email,
+          phone: session.user.phone || '',
+          gender: '',
+          dateOfBirth: '',
+          emailVerified: Boolean(session.user.isEmailVerified),
+        });
+      } else {
+        setAuthMode((prev) => {
+          if (prev === 'AUTHENTICATED') {
+            setAuthUser(null);
+            setUser(null);
+            return 'ANONYMOUS';
+          }
+          return prev;
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const setAuthenticatedSession = (session: AuthSession) => {
+    sessionManager.setSession(session);
+    setAuthMode('AUTHENTICATED');
+    setAuthUser(session.user);
+    setUser({
+      id: session.user.id,
+      fullName: `${session.user.firstName} ${session.user.lastName}`.trim(),
+      email: session.user.email,
+      phone: session.user.phone || '',
+      gender: '',
+      dateOfBirth: '',
+      emailVerified: Boolean(session.user.isEmailVerified),
+    });
+  };
+
+  const setDemoAuth = () => {
+    sessionManager.clearSession();
+    setAuthMode('DEMO');
+    setAuthUser(null);
+    setUser(DEMO_USER);
+  };
+
+  const setAnonymousAuth = () => {
+    sessionManager.clearSession();
+    setAuthMode('ANONYMOUS');
+    setAuthUser(null);
+    setUser(null);
+  };
+
+  const logout = async () => {
+    if (authMode === 'AUTHENTICATED') {
+      try {
+        await authApi.logout();
+      } catch {
+        sessionManager.clearSession();
+      }
+    } else {
+      sessionManager.clearSession();
+    }
+    setAuthMode('ANONYMOUS');
+    setAuthUser(null);
+    setUser(null);
+  };
+
   const [addresses, setAddresses] = useState<Address[]>(DEMO_ADDRESSES);
   const [selectedAddressId, setSelectedAddressId] = useState<string>(DEMO_ADDRESSES[0].id);
   const [orders, setOrders] = useState<Order[]>(DEMO_ORDERS);
@@ -269,6 +378,12 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         user,
         setUser,
         updateUserProfile,
+        authMode,
+        authUser,
+        setAuthenticatedSession,
+        setDemoAuth,
+        setAnonymousAuth,
+        logout,
         addresses,
         addAddress,
         updateAddress,

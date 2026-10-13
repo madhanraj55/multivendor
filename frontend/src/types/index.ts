@@ -131,3 +131,85 @@ export interface UserProfile {
   dateOfBirth: string;
   emailVerified: boolean;
 }
+
+// Backend Auth Types & Contracts
+export type UserRole = 'CUSTOMER' | 'SELLER' | 'ADMIN';
+export type UserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+export type AuthMode = 'AUTHENTICATED' | 'DEMO' | 'ANONYMOUS';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string | null;
+  role: UserRole;
+  status: UserStatus;
+  isEmailVerified?: boolean;
+  isPhoneVerified?: boolean;
+  shop?: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+  } | null;
+  createdAt?: string;
+}
+
+export interface AuthSession {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+}
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  role?: 'CUSTOMER' | 'SELLER';
+}
+
+export interface RegisterResponse {
+  message: string;
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: UserRole;
+    status: UserStatus;
+  };
+  devVerificationToken?: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AuthTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+}
+
+export interface VerifyEmailPayload {
+  token: string;
+}
+
+export interface RefreshTokenPayload {
+  refreshToken: string;
+}
+
+export interface UpdateProfilePayload {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}

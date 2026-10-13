@@ -12,6 +12,7 @@ export function Header() {
     pincode,
     setPincode,
     user,
+    authMode,
     searchQuery,
     setSearchQuery,
   } = useMarketplace();
@@ -137,7 +138,7 @@ export function Header() {
             >
               <span className="bb-header-btn-icon">👤</span>
               <span className="bb-header-btn-label">
-                {user ? user.fullName.split(' ')[0] : 'Sign In'}
+                {user ? `${user.fullName.split(' ')[0]}${authMode === 'DEMO' ? ' (Demo)' : ''}` : 'Sign In'}
               </span>
             </button>
 

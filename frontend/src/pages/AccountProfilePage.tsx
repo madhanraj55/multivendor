@@ -4,7 +4,7 @@ import { useRouter } from '../context/RouterContext.tsx';
 import './AccountProfilePage.css';
 
 export function AccountProfilePage() {
-  const { user, updateUserProfile } = useMarketplace();
+  const { user, authMode, authUser, updateUserProfile, logout } = useMarketplace();
   const { navigate } = useRouter();
 
   const [fullName, setFullName] = useState(user?.fullName || 'Ananya Sharma');
@@ -13,6 +13,7 @@ export function AccountProfilePage() {
   const [gender, setGender] = useState(user?.gender || 'Female');
   const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '1995-08-14');
   const [isSavedToast, setIsSavedToast] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -25,6 +26,16 @@ export function AccountProfilePage() {
     });
     setIsSavedToast(true);
     setTimeout(() => setIsSavedToast(false), 3000);
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      navigate('/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const initials = fullName
@@ -52,7 +63,7 @@ export function AccountProfilePage() {
             <div className="bb-account-avatar">{initials}</div>
             <div className="bb-account-user-meta">
               <div className="bb-account-user-name">{fullName}</div>
-              <div className="bb-account-user-phone">{phone}</div>
+              <div className="bb-account-user-phone">{phone || 'No phone set'}</div>
             </div>
           </div>
 
@@ -97,6 +108,15 @@ export function AccountProfilePage() {
               <span className="bb-account-nav-icon">🛡️</span>
               Email Verification
             </button>
+            <button
+              type="button"
+              disabled={isLoggingOut}
+              className="bb-account-nav-item bb-account-logout-btn"
+              onClick={handleLogout}
+            >
+              <span className="bb-account-nav-icon">🚪</span>
+              {isLoggingOut ? 'Signing Out...' : `Sign Out (${authMode === 'AUTHENTICATED' ? 'Live' : 'Demo'})`}
+            </button>
           </nav>
         </aside>
 
@@ -104,7 +124,15 @@ export function AccountProfilePage() {
         <main className="bb-account-panel">
           <div className="bb-panel-header">
             <h2 className="bb-panel-title">Personal Profile Details</h2>
-            <span className="bb-badge bb-badge-primary">Customer Account</span>
+            <span
+              className={`bb-badge ${
+                authMode === 'AUTHENTICATED' ? 'bb-badge-success' : 'bb-badge-primary'
+              }`}
+            >
+              {authMode === 'AUTHENTICATED'
+                ? `Live Account (${authUser?.role || 'CUSTOMER'})`
+                : 'Demo Session'}
+            </span>
           </div>
 
           {isSavedToast && (
@@ -125,7 +153,7 @@ export function AccountProfilePage() {
                 <p className="bb-form-hint">
                   {user?.emailVerified
                     ? 'Your account is secured with a verified email address.'
-                    : 'Verify your email to receive order tracking updates and receipts.'}
+                    : 'Verify your email to activate all account features.'}
                 </p>
               </div>
             </div>
@@ -160,15 +188,18 @@ export function AccountProfilePage() {
                   required
                   className="bb-input"
                   value={email}
+                  disabled={authMode === 'AUTHENTICATED'}
                   onChange={(e) => setEmail(e.target.value)}
                 />
+                {authMode === 'AUTHENTICATED' && (
+                  <p className="bb-input-hint">Email address cannot be modified once registered.</p>
+                )}
               </div>
 
               <div className="bb-form-group">
-                <label className="bb-label bb-label-required">Mobile Number</label>
+                <label className="bb-label">Mobile Number</label>
                 <input
                   type="tel"
-                  required
                   className="bb-input"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
