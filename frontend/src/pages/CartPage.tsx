@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
-import { EmptyState } from '../components/common/StateViews.tsx';
+import { EmptyState, ErrorState, SkeletonGrid } from '../components/common/StateViews.tsx';
 import type { CartItem } from '../types/index.ts';
 import './CartPage.css';
 
 export function CartPage() {
   const {
     cart,
+    cartLoading,
+    cartError,
+    fetchCart,
     updateCartQuantity,
     removeFromCart,
+    clearCart,
     cartSubtotal,
     toggleWishlist,
     isInWishlist,
@@ -20,6 +24,8 @@ export function CartPage() {
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponMessage, setCouponMessage] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
 
   // Group cart items by seller
   const sellerGroups = cart.reduce<Record<string, { sellerName: string; items: CartItem[] }>>(
@@ -52,12 +58,76 @@ export function CartPage() {
     }
   };
 
-  const handleMoveToWishlist = (item: CartItem) => {
-    if (!isInWishlist(item.productId)) {
-      toggleWishlist(item.productId);
+  const handleUpdateQuantity = async (item: CartItem, nextQty: number) => {
+    setActionError(null);
+    setUpdatingItemId(item.id);
+    try {
+      await updateCartQuantity(item.id, nextQty);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update quantity';
+      setActionError(msg);
+    } finally {
+      setUpdatingItemId(null);
     }
-    removeFromCart(item.id);
   };
+
+  const handleRemoveItem = async (itemId: string) => {
+    setActionError(null);
+    setUpdatingItemId(itemId);
+    try {
+      await removeFromCart(itemId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to remove item';
+      setActionError(msg);
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    setActionError(null);
+    try {
+      await clearCart();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to clear cart';
+      setActionError(msg);
+    }
+  };
+
+  const handleMoveToWishlist = async (item: CartItem) => {
+    setActionError(null);
+    if (!isInWishlist(item.productId)) {
+      try {
+        await toggleWishlist(item.productId);
+      } catch {
+        // Continue to remove
+      }
+    }
+    await handleRemoveItem(item.id);
+  };
+
+  if (cartLoading && cart.length === 0) {
+    return (
+      <div className="bb-container bb-cart-container">
+        <h1 className="bb-plp-title bb-cart-page-title">Shopping Cart</h1>
+        <div style={{ marginTop: '1.5rem' }}>
+          <SkeletonGrid count={3} />
+        </div>
+      </div>
+    );
+  }
+
+  if (cartError && cart.length === 0) {
+    return (
+      <div className="bb-container bb-cart-container">
+        <ErrorState
+          title="Could not load your cart"
+          description={cartError}
+          onRetry={fetchCart}
+        />
+      </div>
+    );
+  }
 
   if (cart.length === 0) {
     return (
@@ -75,9 +145,51 @@ export function CartPage() {
 
   return (
     <div className="bb-container bb-cart-container">
-      <h1 className="bb-plp-title bb-cart-page-title">
-        Shopping Cart ({cart.reduce((a: number, b: CartItem) => a + b.quantity, 0)} Items)
-      </h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="bb-plp-title bb-cart-page-title">
+          Shopping Cart ({cart.reduce((a: number, b: CartItem) => a + b.quantity, 0)} Items)
+        </h1>
+        <button
+          type="button"
+          className="bb-cart-action-link"
+          style={{ fontSize: '0.9rem', color: '#dc2626' }}
+          onClick={handleClearAll}
+        >
+          Clear Cart
+        </button>
+      </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          style={{
+            padding: '0.75rem 1rem',
+            marginBottom: '1rem',
+            borderRadius: '6px',
+            backgroundColor: '#fee2e2',
+            color: '#b91c1c',
+            fontSize: '0.875rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>⚠️ {actionError}</span>
+          <button
+            type="button"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#b91c1c',
+              fontWeight: 'bold',
+            }}
+            onClick={() => setActionError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="bb-cart-layout">
         {/* Left Column: Multi-Vendor Packages */}
@@ -125,13 +237,26 @@ export function CartPage() {
                         </div>
                       )}
 
+                      {/* Availability or stock warnings */}
+                      {item.isAvailable === false && (
+                        <span className="bb-badge" style={{ backgroundColor: '#fee2e2', color: '#b91c1c', marginTop: '0.25rem' }}>
+                          Out of Stock / Unavailable
+                        </span>
+                      )}
+                      {item.availableStock !== undefined && item.quantity > item.availableStock && item.isAvailable !== false && (
+                        <span style={{ fontSize: '0.75rem', color: '#b45309', display: 'block', marginTop: '0.25rem' }}>
+                          Only {item.availableStock} in stock (requested {item.quantity})
+                        </span>
+                      )}
+
                       <div className="bb-cart-item-actions">
                         {/* Stepper */}
                         <div className="bb-qty-stepper">
                           <button
                             type="button"
                             className="bb-qty-btn"
-                            onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                            disabled={updatingItemId === item.id}
+                            onClick={() => handleUpdateQuantity(item, item.quantity - 1)}
                             aria-label="Decrease quantity"
                           >
                             -
@@ -140,7 +265,11 @@ export function CartPage() {
                           <button
                             type="button"
                             className="bb-qty-btn"
-                            onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                            disabled={
+                              updatingItemId === item.id ||
+                              (item.availableStock !== undefined && item.quantity >= item.availableStock)
+                            }
+                            onClick={() => handleUpdateQuantity(item, item.quantity + 1)}
                             aria-label="Increase quantity"
                           >
                             +
@@ -150,7 +279,8 @@ export function CartPage() {
                         <button
                           type="button"
                           className="bb-cart-action-link"
-                          onClick={() => removeFromCart(item.id)}
+                          disabled={updatingItemId === item.id}
+                          onClick={() => handleRemoveItem(item.id)}
                         >
                           Remove
                         </button>
@@ -158,6 +288,7 @@ export function CartPage() {
                         <button
                           type="button"
                           className="bb-cart-action-link"
+                          disabled={updatingItemId === item.id}
                           onClick={() => handleMoveToWishlist(item)}
                         >
                           Save for Later
@@ -166,7 +297,7 @@ export function CartPage() {
                     </div>
 
                     <div className="bb-cart-item-pricing">
-                      ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+                      ₹{(item.lineTotal ?? (item.price * item.quantity)).toLocaleString('en-IN')}
                     </div>
                   </div>
                 ))}
@@ -198,13 +329,13 @@ export function CartPage() {
 
             {couponDiscount > 0 && (
               <div className="bb-summary-row">
-                <span>Promotional Discount</span>
+                <span>Promotional Discount (Provisional)</span>
                 <span className="bb-summary-discount">-₹{couponDiscount}</span>
               </div>
             )}
 
             <div className="bb-summary-row bold">
-              <span>Estimated Total</span>
+              <span>Estimated Total (Provisional)</span>
               <span>₹{grandTotal.toLocaleString('en-IN')}</span>
             </div>
           </div>
@@ -232,7 +363,7 @@ export function CartPage() {
 
           {/* Provisional notice */}
           <div className="bb-provisional-note">
-            ⚠️ <strong>Multi-Vendor Notice:</strong> Items may ship in separate parcels from different seller locations. Final shipping fees and taxes will be confirmed authoritatively by backend logistics upon address selection.
+            ⚠️ <strong>Provisional Estimate Notice:</strong> Subtotal is authoritative from the server. Shipping, packaging fees, and promotional discounts shown here are provisional previews and will be authoritatively validated by the backend during checkout.
           </div>
 
           {/* Proceed to checkout CTA */}

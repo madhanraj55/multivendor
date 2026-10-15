@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import { EmptyState } from '../components/common/StateViews.tsx';
-import type { CartItem } from '../types/index.ts';
+import type { CartItem, CheckoutValidationResponse, BackendCheckoutAttempt } from '../types/index.ts';
+import { checkoutApi, mapAddressToSnapshot, generateCheckoutIdempotencyKey } from '../services/checkoutApi.ts';
 import './CheckoutPage.css';
 
 export function CheckoutPage() {
@@ -13,25 +14,40 @@ export function CheckoutPage() {
     selectedAddressId,
     setSelectedAddressId,
     placeOrder,
+    authMode,
+    authUser,
   } = useMarketplace();
 
   const { navigate } = useRouter();
 
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'UPI' | 'CARD' | 'NETBANKING'>('COD');
+  const [orderNotes, setOrderNotes] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
+  const [isValidating, setIsValidating] = useState<boolean>(() => {
+    return authMode === 'AUTHENTICATED' && cart.length > 0;
+  });
+  const [validationResult, setValidationResult] = useState<CheckoutValidationResponse | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [checkoutAttempt, setCheckoutAttempt] = useState<BackendCheckoutAttempt | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reservationExpired, setReservationExpired] = useState(false);
 
-  if (cart.length === 0) {
-    return (
-      <div className="bb-container bb-checkout-container">
-        <EmptyState
-          icon="🛍️"
-          title="Your Checkout is Empty"
-          description="You don't have any products in your cart to checkout. Please browse our marketplace and add your favorite items!"
-          actionText="Browse Marketplace"
-          onAction={() => navigate('/products')}
-        />
-      </div>
-    );
+  // Reservation idempotency key: maintained across retries for the same logical checkout,
+  // and reset when cart, selected address, user session, or reservation expiry occurs.
+  const [reservationIdempotencyKey, setReservationIdempotencyKey] = useState<string>(() =>
+    generateCheckoutIdempotencyKey()
+  );
+
+  // Track checkout context fingerprint to reset attempt & key when cart, address, or customer changes
+  const cartSignature = cart.map((item) => `${item.id}:${item.quantity}:${item.price}`).join('|');
+  const currentCheckoutFingerprint = `${cartSignature}|${selectedAddressId || ''}|${authUser?.id || ''}|${authMode}`;
+  const [prevCheckoutFingerprint, setPrevCheckoutFingerprint] = useState(currentCheckoutFingerprint);
+
+  if (prevCheckoutFingerprint !== currentCheckoutFingerprint) {
+    setPrevCheckoutFingerprint(currentCheckoutFingerprint);
+    setReservationIdempotencyKey(generateCheckoutIdempotencyKey());
+    setCheckoutAttempt(null);
+    setReservationExpired(false);
   }
 
   // Group cart items by seller
@@ -50,17 +66,143 @@ export function CheckoutPage() {
   );
 
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
-  const estimatedShipping = cartSubtotal >= 999 ? 0 : 80;
-  const promotionalDiscount = 100;
-  const grandTotal = Math.max(0, cartSubtotal + estimatedShipping - promotionalDiscount);
 
-  const handlePlaceOrder = () => {
+  // Perform backend validation on mount when in authenticated mode
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (authMode === 'AUTHENTICATED' && cart.length > 0) {
+      checkoutApi
+        .validateCheckout()
+        .then((res) => {
+          if (isCancelled) return;
+          setValidationResult(res);
+          if (!res.isValid) {
+            setValidationError(
+              res.errors.length > 0
+                ? res.errors.join(', ')
+                : 'Some cart items are no longer available or valid for checkout.'
+            );
+          }
+        })
+        .catch((err) => {
+          if (isCancelled) return;
+          setValidationError(err instanceof Error ? err.message : 'Failed to validate cart with server');
+        })
+        .finally(() => {
+          if (!isCancelled) setIsValidating(false);
+        });
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authMode, cart.length]);
+
+  // Monitor reservation expiry if a reservation exists
+  useEffect(() => {
+    if (!checkoutAttempt?.expiresAt) return;
+    const expiryTime = new Date(checkoutAttempt.expiresAt).getTime();
+    const timer = setInterval(() => {
+      if (Date.now() >= expiryTime) {
+        setReservationExpired(true);
+        // Reservation expired: reset idempotency key so that renewed reservation creates a clean attempt
+        setReservationIdempotencyKey(generateCheckoutIdempotencyKey());
+        clearInterval(timer);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [checkoutAttempt?.expiresAt]);
+
+  if (cart.length === 0) {
+    return (
+      <div className="bb-container bb-checkout-container">
+        <EmptyState
+          icon="🛍️"
+          title="Your Checkout is Empty"
+          description="You don't have any products in your cart to checkout. Please browse our marketplace and add your favorite items!"
+          actionText="Browse Marketplace"
+          onAction={() => navigate('/products')}
+        />
+      </div>
+    );
+  }
+
+  // Authoritative calculations: if backend validation returned authoritative totals, use them;
+  // otherwise fallback cleanly for demo mode.
+  const authoritativeSubtotal =
+    authMode === 'AUTHENTICATED' && validationResult?.subtotalAmount !== undefined
+      ? validationResult.subtotalAmount
+      : cartSubtotal;
+
+  const estimatedShipping = authoritativeSubtotal >= 999 ? 0 : 80;
+  const grandTotal = authoritativeSubtotal + estimatedShipping;
+
+  const handlePlaceOrder = async () => {
+    if (isPlacing) return;
+    setActionError(null);
+
+    if (!selectedAddress) {
+      setActionError('Please select or add a delivery address before confirming your order.');
+      return;
+    }
+
     setIsPlacing(true);
-    setTimeout(() => {
-      const createdOrder = placeOrder();
+
+    try {
+      if (authMode === 'AUTHENTICATED') {
+        // Step 1: Stock Reservation (POST /api/v1/checkout/reserve)
+        // If reservation previously succeeded or was previously initiated with reservationIdempotencyKey,
+        // reusing the same key allows backend to return existing attempt safely if response was lost,
+        // without reserving duplicate stock or throwing unique constraint violations.
+        let activeAttempt = checkoutAttempt;
+
+        if (!activeAttempt || reservationExpired) {
+          // If expired, ensure fresh key
+          const keyToUse = reservationExpired
+            ? generateCheckoutIdempotencyKey()
+            : reservationIdempotencyKey;
+
+          if (reservationExpired) {
+            setReservationIdempotencyKey(keyToUse);
+            setReservationExpired(false);
+          }
+
+          const addressSnapshot = mapAddressToSnapshot(selectedAddress);
+          const reserveRes = await checkoutApi.reserveCheckout({
+            idempotencyKey: keyToUse,
+            shippingAddress: addressSnapshot,
+            billingAddress: addressSnapshot,
+          });
+
+          activeAttempt = reserveRes.checkoutAttempt;
+          setCheckoutAttempt(activeAttempt);
+        }
+
+        // Step 2: Order Placement (POST /api/v1/checkout/place-order)
+        const createdOrder = await placeOrder(orderNotes.trim() || undefined, activeAttempt.id);
+        
+        // Reset idempotency key after order success
+        setReservationIdempotencyKey(generateCheckoutIdempotencyKey());
+        setCheckoutAttempt(null);
+        navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
+      } else {
+        // Demo Mode order placement
+        const createdOrder = await placeOrder(orderNotes.trim() || undefined);
+        navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to place order';
+      setActionError(msg);
+      // If error indicates expiry or validation problem, reset attempt and key
+      if (msg.toLowerCase().includes('expired')) {
+        setReservationExpired(true);
+        setCheckoutAttempt(null);
+        setReservationIdempotencyKey(generateCheckoutIdempotencyKey());
+      }
+    } finally {
       setIsPlacing(false);
-      navigate(`/orders?orderId=${createdOrder.id}`);
-    }, 600);
+    }
   };
 
   return (
@@ -249,6 +391,23 @@ export function CheckoutPage() {
               </label>
             </div>
           </section>
+
+          {/* Optional Order Notes */}
+          <section className="bb-checkout-section" aria-labelledby="heading-delivery-notes">
+            <div className="bb-checkout-section-header">
+              <h2 id="heading-delivery-notes" className="bb-checkout-section-title">
+                <span>📝 4. Delivery Instructions & Notes (Optional)</span>
+              </h2>
+            </div>
+            <textarea
+              className="bb-input"
+              style={{ width: '100%', minHeight: '70px', resize: 'vertical' }}
+              placeholder="e.g. Ring bell twice, leave with security guard, or deliver after 2 PM"
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              maxLength={500}
+            />
+          </section>
         </div>
 
         {/* Right Column: Order Total & Final Action */}
@@ -256,27 +415,70 @@ export function CheckoutPage() {
           <div className="bb-checkout-summary-card">
             <h3 className="bb-summary-title">Payment Summary</h3>
 
+            {actionError && (
+              <div
+                role="alert"
+                style={{
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  borderRadius: '6px',
+                  backgroundColor: '#fee2e2',
+                  color: '#b91c1c',
+                  fontSize: '0.85rem',
+                }}
+              >
+                ⚠️ {actionError}
+              </div>
+            )}
+
+            {validationError && (
+              <div
+                role="alert"
+                style={{
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  borderRadius: '6px',
+                  backgroundColor: '#fef3c7',
+                  color: '#92400e',
+                  fontSize: '0.85rem',
+                }}
+              >
+                ⚠️ <strong>Cart Notice:</strong> {validationError}
+              </div>
+            )}
+
+            {reservationExpired && (
+              <div
+                role="alert"
+                style={{
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  borderRadius: '6px',
+                  backgroundColor: '#fee2e2',
+                  color: '#b91c1c',
+                  fontSize: '0.85rem',
+                }}
+              >
+                ⚠️ <strong>Reservation Expired:</strong> Your stock hold has elapsed. Clicking below will renew stock reservation before placing your order.
+              </div>
+            )}
+
             <div className="bb-summary-row">
               <span>Items Subtotal ({cart.reduce((a, b) => a + b.quantity, 0)} items)</span>
-              <span>₹{cartSubtotal.toLocaleString('en-IN')}</span>
+              <span>₹{authoritativeSubtotal.toLocaleString('en-IN')}</span>
             </div>
 
             <div className="bb-summary-row">
-              <span>Multi-Vendor Shipping Fee</span>
+              <span>Multi-Vendor Shipping Fee (Provisional)</span>
               <span>{estimatedShipping === 0 ? 'FREE' : `₹${estimatedShipping}`}</span>
             </div>
 
-            <div className="bb-summary-row highlight-green">
-              <span>Welcome Promo Discount</span>
-              <span>- ₹{promotionalDiscount}</span>
-            </div>
-
             <div className="bb-delivery-tax-disclaimer">
-              📌 <strong>Backend Calculation Policy Notice:</strong> Final GST breakdown and authoritative carrier delivery rates will be calculated by the NestJS backend during live checkout integration.
+              ℹ️ <strong>Authoritative Pricing & Payment Notice:</strong> Prices and line subtotals are verified directly by the server. Online payment integration is scheduled for a future stage; orders are currently placed with <strong>Payment Pending</strong> and will not be dispatched by sellers without verified payment confirmation.
             </div>
 
             <div className="bb-summary-row total-row">
-              <span>Payable Grand Total</span>
+              <span>Payable Order Total</span>
               <span className="bb-summary-total-price">
                 ₹{grandTotal.toLocaleString('en-IN')}
               </span>
@@ -286,9 +488,13 @@ export function CheckoutPage() {
               type="button"
               className="bb-btn bb-btn-primary bb-btn-lg bb-btn-block"
               onClick={handlePlaceOrder}
-              disabled={isPlacing}
+              disabled={isPlacing || isValidating || (validationResult !== null && !validationResult.isValid)}
             >
-              {isPlacing ? 'Confirming Order...' : 'Place Order & Confirm →'}
+              {isPlacing
+                ? 'Confirming Order with Backend...'
+                : isValidating
+                ? 'Verifying Cart & Stock...'
+                : 'Place Order & Confirm →'}
             </button>
 
             <div className="bb-checkout-guarantee">

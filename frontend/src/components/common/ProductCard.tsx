@@ -14,6 +14,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const [justAdded, setJustAdded] = useState(false);
 
   const isFavorited = isInWishlist(product.id);
+  const [isTogglingWishlist, setIsTogglingWishlist] = useState(false);
 
   const handleCardClick = () => {
     navigate(`/product/${product.id}`);
@@ -26,10 +27,19 @@ export function ProductCard({ product }: ProductCardProps) {
     setTimeout(() => setJustAdded(false), 1500);
   };
 
-  const handleWishlistToggle = (e: React.MouseEvent) => {
+  const handleWishlistToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleWishlist(product.id);
+    if (isTogglingWishlist) return;
+    setIsTogglingWishlist(true);
+    try {
+      await toggleWishlist(product.id);
+    } catch {
+      // Handled and reverted by context
+    } finally {
+      setIsTogglingWishlist(false);
+    }
   };
+
 
   return (
     <article className="bb-product-card" onClick={handleCardClick}>

@@ -36,6 +36,9 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
   const [pincodeChecked, setPincodeChecked] = useState(Boolean(pincode));
   const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'seller'>('description');
   const [addedToast, setAddedToast] = useState(false);
+  const [isTogglingWishlist, setIsTogglingWishlist] = useState(false);
+  const [cartActionError, setCartActionError] = useState<string | null>(null);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   if (!product) {
     return (
@@ -53,15 +56,48 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
 
   const isFavorited = isInWishlist(product.id);
 
-  const handleAddToCart = () => {
-    addToCart(product, quantity, selectedVariants);
-    setAddedToast(true);
-    setTimeout(() => setAddedToast(false), 2000);
+
+  const handleWishlistToggle = async () => {
+    if (isTogglingWishlist) return;
+    setIsTogglingWishlist(true);
+    try {
+      await toggleWishlist(product.id);
+    } catch {
+      // Reverted by context
+    } finally {
+      setIsTogglingWishlist(false);
+    }
   };
 
-  const handleBuyNow = () => {
-    addToCart(product, quantity, selectedVariants);
-    navigate('/checkout');
+  const handleAddToCart = async () => {
+    if (isAddingToCart) return;
+    setCartActionError(null);
+    setIsAddingToCart(true);
+    try {
+      await addToCart(product, quantity, selectedVariants);
+      setAddedToast(true);
+      setTimeout(() => setAddedToast(false), 2000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add product to cart';
+      setCartActionError(msg);
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
+  const handleBuyNow = async () => {
+    if (isAddingToCart) return;
+    setCartActionError(null);
+    setIsAddingToCart(true);
+    try {
+      await addToCart(product, quantity, selectedVariants);
+      navigate('/checkout');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add product to cart';
+      setCartActionError(msg);
+    } finally {
+      setIsAddingToCart(false);
+    }
   };
 
   const handleCheckPincode = (e: React.FormEvent) => {
@@ -224,6 +260,22 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
           </div>
 
           {/* Action Buttons: Add to Cart & Buy Now */}
+          {cartActionError && (
+            <div
+              role="alert"
+              style={{
+                padding: '0.5rem 0.75rem',
+                marginBottom: '0.75rem',
+                borderRadius: '4px',
+                backgroundColor: '#fee2e2',
+                color: '#b91c1c',
+                fontSize: '0.85rem',
+              }}
+            >
+              ⚠️ {cartActionError}
+            </div>
+          )}
+
           <div className="bb-pdp-actions">
             <button
               type="button"
@@ -241,13 +293,15 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
             </button>
             <button
               type="button"
+              disabled={isTogglingWishlist}
               className={`bb-btn bb-wishlist-pdp-btn ${isFavorited ? 'favorited' : ''}`}
-              onClick={() => toggleWishlist(product.id)}
+              onClick={handleWishlistToggle}
               aria-label={isFavorited ? 'Remove from wishlist' : 'Save to wishlist'}
               title={isFavorited ? 'Saved to wishlist' : 'Add to wishlist'}
             >
-              {isFavorited ? '♥ Saved' : '♡ Wishlist'}
+              {isTogglingWishlist ? '…' : isFavorited ? '♥ Saved' : '♡ Wishlist'}
             </button>
+
           </div>
 
           {addedToast && (

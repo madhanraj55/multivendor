@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type {
   Product,
   CartItem,
@@ -15,7 +15,7 @@ import {
   DEMO_ORDERS,
   DEMO_USER,
 } from '../data/demoData.ts';
-import { sessionManager } from '../services/apiClient.ts';
+import { sessionManager, ApiError } from '../services/apiClient.ts';
 import { authApi } from '../services/authApi.ts';
 import {
   addressesApi,
@@ -23,21 +23,45 @@ import {
   mapUiAddressToCreatePayload,
   mapUiAddressToUpdatePayload,
 } from '../services/addressesApi.ts';
+import {
+  wishlistApi,
+  mapWishlistItemToProduct,
+} from '../services/wishlistApi.ts';
+import {
+  cartApi,
+  mapBackendCartItemToUi,
+} from '../services/cartApi.ts';
+import {
+  checkoutApi,
+  mapBackendOrderToUi,
+} from '../services/checkoutApi.ts';
+
 
 interface MarketplaceContextValue {
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number, selectedVariants?: Record<string, string>) => void;
-  updateCartQuantity: (cartItemId: string, quantity: number) => void;
-  removeFromCart: (cartItemId: string) => void;
-  clearCart: () => void;
+  cartLoading: boolean;
+  cartError: string | null;
+  fetchCart: () => Promise<void>;
+  addToCart: (product: Product, quantity?: number, selectedVariants?: Record<string, string>) => Promise<void> | void;
+  updateCartQuantity: (cartItemId: string, quantity: number) => Promise<void> | void;
+  removeFromCart: (cartItemId: string) => Promise<void> | void;
+  clearCart: () => Promise<void> | void;
   cartTotalCount: number;
   cartSubtotal: number;
 
+
   wishlist: string[];
-  toggleWishlist: (productId: string) => void;
+  wishlistProducts: Product[];
+  wishlistLoading: boolean;
+  wishlistError: string | null;
+  fetchWishlist: () => Promise<void>;
+  toggleWishlist: (productId: string) => Promise<void>;
+  removeFromWishlist: (productId: string) => Promise<void>;
+  clearWishlist: () => Promise<void>;
   isInWishlist: (productId: string) => boolean;
 
   user: UserProfile | null;
+
   setUser: (user: UserProfile | null) => void;
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>;
 
@@ -60,7 +84,7 @@ interface MarketplaceContextValue {
   setSelectedAddressId: (id: string) => void;
 
   orders: Order[];
-  placeOrder: (notes?: string) => Order;
+  placeOrder: (notes?: string, checkoutAttemptId?: string) => Promise<Order> | Order;
 
   pincode: string;
   setPincode: (pin: string) => void;
@@ -72,8 +96,8 @@ interface MarketplaceContextValue {
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null);
 
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
-  // Initialize sample cart items from demo data
-  const [cart, setCart] = useState<CartItem[]>([
+  // Initialize sample cart items for demo mode
+  const [demoCart, setDemoCart] = useState<CartItem[]>([
     {
       id: 'cart-1',
       productId: DEMO_PRODUCTS[0].id,
@@ -96,10 +120,47 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
-  const [wishlist, setWishlist] = useState<string[]>([
+  const [authCart, setAuthCart] = useState<CartItem[]>([]);
+  const [authCartSubtotal, setAuthCartSubtotal] = useState<number>(0);
+  const [cartLoading, setCartLoading] = useState<boolean>(() => {
+    return Boolean(sessionManager.getSession());
+  });
+  const [cartError, setCartError] = useState<string | null>(null);
+
+  // Synchronization refs for robust cart mutation serialization and stale response prevention
+  const cartQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const authCartRef = useRef<CartItem[]>([]);
+  const cartRequestIdRef = useRef<number>(0);
+
+  useEffect(() => {
+    authCartRef.current = authCart;
+  }, [authCart]);
+
+  const [demoWishlist, setDemoWishlist] = useState<string[]>([
     DEMO_PRODUCTS[1].id,
     DEMO_PRODUCTS[4].id,
   ]);
+  const [authWishlistIds, setAuthWishlistIds] = useState<string[]>([]);
+  const [authWishlistProducts, setAuthWishlistProducts] = useState<Product[]>([]);
+  const [wishlistLoading, setWishlistLoading] = useState<boolean>(() => {
+    return Boolean(sessionManager.getSession());
+  });
+
+  const [wishlistError, setWishlistError] = useState<string | null>(null);
+
+  // Synchronization refs for robust overlapping mutation serialization
+  const wishlistQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const authWishlistIdsRef = useRef<string[]>([]);
+  const authWishlistProductsRef = useRef<Product[]>([]);
+
+  useEffect(() => {
+    authWishlistIdsRef.current = authWishlistIds;
+  }, [authWishlistIds]);
+
+  useEffect(() => {
+    authWishlistProductsRef.current = authWishlistProducts;
+  }, [authWishlistProducts]);
+
 
   // Auth state: check if an active authenticated backend session exists
   const [authMode, setAuthMode] = useState<AuthMode>(() => {
@@ -108,6 +169,15 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     return sessionManager.getSession()?.user ?? null;
+  });
+
+  const [addresses, setAddresses] = useState<Address[]>(() => {
+    return sessionManager.getSession() ? [] : DEMO_ADDRESSES;
+  });
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressesError, setAddressesError] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>(() => {
+    return sessionManager.getSession() ? '' : DEMO_ADDRESSES[0].id;
   });
 
   const [user, setUser] = useState<UserProfile | null>(() => {
@@ -130,7 +200,26 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     const unsubscribe = sessionManager.subscribe((session) => {
       if (session) {
         setAuthMode('AUTHENTICATED');
-        setAuthUser(session.user);
+        setAuthUser((prevUser) => {
+          if (prevUser && prevUser.id !== session.user.id) {
+            // Immediate clearance on switching to another authenticated user
+            setAuthWishlistIds([]);
+            setAuthWishlistProducts([]);
+            authWishlistIdsRef.current = [];
+            authWishlistProductsRef.current = [];
+            setWishlistError(null);
+            setWishlistLoading(true);
+            setAuthCart([]);
+            authCartRef.current = [];
+            setAuthCartSubtotal(0);
+            setCartError(null);
+            setCartLoading(true);
+            setAddresses([]);
+            setSelectedAddressId('');
+            setAddressesLoading(true);
+          }
+          return session.user;
+        });
         setUser({
           id: session.user.id,
           fullName: `${session.user.firstName} ${session.user.lastName}`.trim(),
@@ -145,6 +234,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           if (prev === 'AUTHENTICATED') {
             setAuthUser(null);
             setUser(null);
+            setAuthWishlistIds([]);
+            setAuthWishlistProducts([]);
+            authWishlistIdsRef.current = [];
+            authWishlistProductsRef.current = [];
+            setWishlistError(null);
+            setAuthCart([]);
+            authCartRef.current = [];
+            setAuthCartSubtotal(0);
+            setCartError(null);
+            setAddresses([]);
+            setSelectedAddressId('');
             return 'ANONYMOUS';
           }
           return prev;
@@ -156,6 +256,23 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setAuthenticatedSession = (session: AuthSession) => {
+    // If switching accounts or logging in freshly, immediately clear previous state
+    if (authUser && authUser.id !== session.user.id) {
+      setAuthWishlistIds([]);
+      setAuthWishlistProducts([]);
+      authWishlistIdsRef.current = [];
+      authWishlistProductsRef.current = [];
+      setWishlistError(null);
+      setWishlistLoading(true);
+      setAuthCart([]);
+      authCartRef.current = [];
+      setAuthCartSubtotal(0);
+      setCartError(null);
+      setCartLoading(true);
+      setAddresses([]);
+      setSelectedAddressId('');
+      setAddressesLoading(true);
+    }
     sessionManager.setSession(session);
     setAuthMode('AUTHENTICATED');
     setAuthUser(session.user);
@@ -179,6 +296,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId(DEMO_ADDRESSES[0]?.id || '');
     setAddressesLoading(false);
     setAddressesError(null);
+    setAuthWishlistIds([]);
+    setAuthWishlistProducts([]);
+    authWishlistIdsRef.current = [];
+    authWishlistProductsRef.current = [];
+    setWishlistError(null);
+    setWishlistLoading(false);
+    setAuthCart([]);
+    authCartRef.current = [];
+    setAuthCartSubtotal(0);
+    setCartError(null);
+    setCartLoading(false);
   };
 
   const setAnonymousAuth = () => {
@@ -190,6 +318,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId('');
     setAddressesLoading(false);
     setAddressesError(null);
+    setAuthWishlistIds([]);
+    setAuthWishlistProducts([]);
+    authWishlistIdsRef.current = [];
+    authWishlistProductsRef.current = [];
+    setWishlistError(null);
+    setWishlistLoading(false);
+    setAuthCart([]);
+    authCartRef.current = [];
+    setAuthCartSubtotal(0);
+    setCartError(null);
+    setCartLoading(false);
   };
 
   const logout = async () => {
@@ -209,16 +348,21 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId('');
     setAddressesLoading(false);
     setAddressesError(null);
+    setAuthWishlistIds([]);
+    setAuthWishlistProducts([]);
+    authWishlistIdsRef.current = [];
+    authWishlistProductsRef.current = [];
+    setWishlistError(null);
+    setWishlistLoading(false);
+    setAuthCart([]);
+    authCartRef.current = [];
+    setAuthCartSubtotal(0);
+    setCartError(null);
+    setCartLoading(false);
+    cartRequestIdRef.current++;
   };
 
-  const [addresses, setAddresses] = useState<Address[]>(() => {
-    return sessionManager.getSession() ? [] : DEMO_ADDRESSES;
-  });
-  const [addressesLoading, setAddressesLoading] = useState(false);
-  const [addressesError, setAddressesError] = useState<string | null>(null);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>(() => {
-    return sessionManager.getSession() ? '' : DEMO_ADDRESSES[0].id;
-  });
+
   const [orders, setOrders] = useState<Order[]>(DEMO_ORDERS);
   const [pincode, setPincode] = useState<string>('560038');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -252,11 +396,62 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }
   }, [authMode]);
 
-  // Synchronize address list whenever authMode changes via external effect
+  const fetchWishlist = useCallback(async () => {
+    if (authMode !== 'AUTHENTICATED') {
+      setWishlistLoading(false);
+      setWishlistError(null);
+      return;
+    }
+
+    setWishlistLoading(true);
+    setWishlistError(null);
+    try {
+      const res = await wishlistApi.getWishlist();
+      const ids = res.items.map((item) => item.productId);
+      const products = res.items.map(mapWishlistItemToProduct);
+      setAuthWishlistIds(ids);
+      setAuthWishlistProducts(products);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load wishlist from server';
+      setWishlistError(message);
+    } finally {
+      setWishlistLoading(false);
+    }
+  }, [authMode]);
+
+  const fetchCart = useCallback(async () => {
+    if (authMode !== 'AUTHENTICATED') {
+      setCartLoading(false);
+      setCartError(null);
+      return;
+    }
+
+    const currentReqId = ++cartRequestIdRef.current;
+    setCartLoading(true);
+    setCartError(null);
+    try {
+      const res = await cartApi.getCart();
+      if (currentReqId !== cartRequestIdRef.current) return;
+      const uiItems = res.items.map(mapBackendCartItemToUi);
+      setAuthCart(uiItems);
+      authCartRef.current = uiItems;
+      setAuthCartSubtotal(res.subtotalAmount);
+    } catch (err) {
+      if (currentReqId !== cartRequestIdRef.current) return;
+      const message = err instanceof Error ? err.message : 'Failed to load cart from server';
+      setCartError(message);
+    } finally {
+      if (currentReqId === cartRequestIdRef.current) {
+        setCartLoading(false);
+      }
+    }
+  }, [authMode]);
+
+  // Synchronize address list, wishlist, and cart whenever authMode or authUser changes
   useEffect(() => {
     let isCancelled = false;
 
-    if (authMode === 'AUTHENTICATED') {
+    if (authMode === 'AUTHENTICATED' && authUser?.id) {
       addressesApi
         .getAddresses()
         .then((backendAddrs) => {
@@ -272,77 +467,525 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           setAddressesError(err instanceof Error ? err.message : 'Failed to load addresses from server');
           setAddressesLoading(false);
         });
+
+      wishlistApi
+        .getWishlist()
+        .then((res) => {
+          if (isCancelled) return;
+          const ids = res.items.map((item) => item.productId);
+          const products = res.items.map(mapWishlistItemToProduct);
+          setAuthWishlistIds(ids);
+          setAuthWishlistProducts(products);
+          setWishlistError(null);
+          setWishlistLoading(false);
+        })
+        .catch((err) => {
+          if (isCancelled) return;
+          setWishlistError(err instanceof Error ? err.message : 'Failed to load wishlist from server');
+          setWishlistLoading(false);
+        });
+
+      const currentReqId = ++cartRequestIdRef.current;
+      cartApi
+        .getCart()
+        .then((res) => {
+          if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
+          const uiItems = res.items.map(mapBackendCartItemToUi);
+          setAuthCart(uiItems);
+          authCartRef.current = uiItems;
+          setAuthCartSubtotal(res.subtotalAmount);
+          setCartError(null);
+          setCartLoading(false);
+        })
+        .catch((err) => {
+          if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
+          setCartError(err instanceof Error ? err.message : 'Failed to load cart from server');
+          setCartLoading(false);
+        });
     }
 
     return () => {
       isCancelled = true;
     };
-  }, [authMode]);
+  }, [authMode, authUser?.id]);
 
-  const addToCart = (
+
+  const addToCart = async (
     product: Product,
     quantity = 1,
     selectedVariants: Record<string, string> = {}
-  ) => {
-    setCart((prev) => {
-      // Check if item with same variant already exists
-      const existingIndex = prev.findIndex(
-        (item) =>
-          item.productId === product.id &&
-          JSON.stringify(item.selectedVariants) === JSON.stringify(selectedVariants)
-      );
+  ): Promise<void> => {
+    if (authMode !== 'AUTHENTICATED') {
+      setDemoCart((prev) => {
+        // Check if item with same variant already exists
+        const existingIndex = prev.findIndex(
+          (item) =>
+            item.productId === product.id &&
+            JSON.stringify(item.selectedVariants) === JSON.stringify(selectedVariants)
+        );
 
-      if (existingIndex > -1) {
-        const next = [...prev];
-        next[existingIndex] = {
-          ...next[existingIndex],
-          quantity: next[existingIndex].quantity + quantity,
+        if (existingIndex > -1) {
+          const next = [...prev];
+          next[existingIndex] = {
+            ...next[existingIndex],
+            quantity: next[existingIndex].quantity + quantity,
+          };
+          return next;
+        }
+
+        const newItem: CartItem = {
+          id: `cart-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          productId: product.id,
+          product,
+          selectedVariants,
+          quantity,
+          price: product.price,
+          sellerId: product.sellerId,
+          sellerName: product.sellerName,
         };
-        return next;
-      }
-
-      const newItem: CartItem = {
-        id: `cart-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        productId: product.id,
-        product,
-        selectedVariants,
-        quantity,
-        price: product.price,
-        sellerId: product.sellerId,
-        sellerName: product.sellerName,
-      };
-      return [...prev, newItem];
-    });
-  };
-
-  const updateCartQuantity = (cartItemId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(cartItemId);
+        return [...prev, newItem];
+      });
       return;
     }
-    setCart((prev) =>
-      prev.map((item) => (item.id === cartItemId ? { ...item, quantity } : item))
+
+    // Authenticated Mode: Resolve variantId
+    // Check if product or selected variants contain an exact variantId
+    let targetVariantId: string | undefined;
+
+    const isUuid = (id: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    // 1. If product.variants is available, find matching option id
+    if (Array.isArray(product.variants) && product.variants.length > 0) {
+      for (const group of product.variants) {
+        const selectedLabel = selectedVariants[group.name];
+        if (selectedLabel) {
+          const matchOpt = group.options.find((opt) => opt.label === selectedLabel || opt.value === selectedLabel);
+          if (matchOpt && isUuid(matchOpt.id)) {
+            targetVariantId = matchOpt.id;
+            break;
+          }
+        }
+      }
+    }
+
+    // 2. If not found and product has a valid backend ID (UUID format)
+    if (!targetVariantId && isUuid(product.id)) {
+      try {
+        const variants = await cartApi.getProductVariants(product.id);
+        if (variants && variants.length > 0) {
+          const match = variants.find((v) => {
+            if (!v.attributes || typeof v.attributes !== 'object') return false;
+            return Object.entries(selectedVariants).every(
+              ([k, val]) => String(v.attributes?.[k]) === String(val)
+            );
+          });
+          targetVariantId = match?.id || variants[0]?.id;
+        }
+      } catch {
+        // Fall back to product.id if variants cannot be fetched
+      }
+    }
+
+    if (!targetVariantId) {
+      // If still not resolved or it's a demo product ID (e.g. prod-1), keep in demo cart or use product.id
+      if (!isUuid(product.id)) {
+        // Demo product added while authenticated: safely handle in demoCart
+        setDemoCart((prev) => [
+          ...prev,
+          {
+            id: `cart-${Date.now()}`,
+            productId: product.id,
+            product,
+            selectedVariants,
+            quantity,
+            price: product.price,
+            sellerId: product.sellerId,
+            sellerName: product.sellerName,
+          },
+        ]);
+        return;
+      }
+      targetVariantId = product.id;
+    }
+
+    // Enqueue mutation to prevent race conditions
+    const op = async () => {
+      try {
+        setCartError(null);
+        const res = await cartApi.addToCart({
+          variantId: targetVariantId!,
+          quantity,
+        });
+        const uiItems = res.items.map(mapBackendCartItemToUi);
+        setAuthCart(uiItems);
+        authCartRef.current = uiItems;
+        setAuthCartSubtotal(res.subtotalAmount);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to add item to cart';
+        setCartError(msg);
+        throw err;
+      }
+    };
+
+    const nextQueue = cartQueueRef.current.then(op, op);
+    cartQueueRef.current = nextQueue.catch(() => {});
+    return nextQueue;
+  };
+
+  const updateCartQuantity = async (cartItemId: string, quantity: number): Promise<void> => {
+    if (quantity <= 0) {
+      return removeFromCart(cartItemId);
+    }
+
+    if (authMode !== 'AUTHENTICATED') {
+      setDemoCart((prev) =>
+        prev.map((item) => (item.id === cartItemId ? { ...item, quantity } : item))
+      );
+      return;
+    }
+
+    // Find the item in authCart to get variantId
+    const item = authCartRef.current.find(
+      (i) => i.id === cartItemId || i.variantId === cartItemId
     );
+    const targetVariantId = item?.variantId || cartItemId;
+
+    // Optimistic UI update
+    setAuthCart((prev) =>
+      prev.map((i) =>
+        i.id === cartItemId || i.variantId === targetVariantId ? { ...i, quantity } : i
+      )
+    );
+
+    const op = async () => {
+      try {
+        setCartError(null);
+        const res = await cartApi.updateCartItem(targetVariantId, { quantity });
+        const uiItems = res.items.map(mapBackendCartItemToUi);
+        setAuthCart(uiItems);
+        authCartRef.current = uiItems;
+        setAuthCartSubtotal(res.subtotalAmount);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to update item quantity';
+        setCartError(msg);
+        // Refresh authoritative cart on failure to revert optimistic change
+        try {
+          const refreshed = await cartApi.getCart();
+          const uiItems = refreshed.items.map(mapBackendCartItemToUi);
+          setAuthCart(uiItems);
+          authCartRef.current = uiItems;
+          setAuthCartSubtotal(refreshed.subtotalAmount);
+        } catch {
+          // Keep current state if refresh also fails
+        }
+        throw err;
+      }
+    };
+
+    const nextQueue = cartQueueRef.current.then(op, op);
+    cartQueueRef.current = nextQueue.catch(() => {});
+    return nextQueue;
   };
 
-  const removeFromCart = (cartItemId: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== cartItemId));
+  const removeFromCart = async (cartItemId: string): Promise<void> => {
+    if (authMode !== 'AUTHENTICATED') {
+      setDemoCart((prev) => prev.filter((item) => item.id !== cartItemId));
+      return;
+    }
+
+    const item = authCartRef.current.find(
+      (i) => i.id === cartItemId || i.variantId === cartItemId
+    );
+    const targetVariantId = item?.variantId || cartItemId;
+
+    // Optimistic removal
+    setAuthCart((prev) =>
+      prev.filter((i) => i.id !== cartItemId && i.variantId !== targetVariantId)
+    );
+    authCartRef.current = authCartRef.current.filter(
+      (i) => i.id !== cartItemId && i.variantId !== targetVariantId
+    );
+
+    const op = async () => {
+      try {
+        setCartError(null);
+        const res = await cartApi.removeCartItem(targetVariantId);
+        const uiItems = res.items.map(mapBackendCartItemToUi);
+        setAuthCart(uiItems);
+        authCartRef.current = uiItems;
+        setAuthCartSubtotal(res.subtotalAmount);
+      } catch (err) {
+        if (err instanceof ApiError && err.statusCode === 404) {
+          // Item already removed on backend: refresh state silently
+          try {
+            const refreshed = await cartApi.getCart();
+            const uiItems = refreshed.items.map(mapBackendCartItemToUi);
+            setAuthCart(uiItems);
+            authCartRef.current = uiItems;
+            setAuthCartSubtotal(refreshed.subtotalAmount);
+          } catch {
+            // Keep optimistic removal
+          }
+          return;
+        }
+
+        const msg = err instanceof Error ? err.message : 'Failed to remove item from cart';
+        setCartError(msg);
+        // Refresh authoritative cart to rollback
+        try {
+          const refreshed = await cartApi.getCart();
+          const uiItems = refreshed.items.map(mapBackendCartItemToUi);
+          setAuthCart(uiItems);
+          authCartRef.current = uiItems;
+          setAuthCartSubtotal(refreshed.subtotalAmount);
+        } catch {
+          // Keep current state
+        }
+        throw err;
+      }
+    };
+
+    const nextQueue = cartQueueRef.current.then(op, op);
+    cartQueueRef.current = nextQueue.catch(() => {});
+    return nextQueue;
   };
 
-  const clearCart = () => {
-    setCart([]);
+  const clearCart = async (): Promise<void> => {
+    if (authMode !== 'AUTHENTICATED') {
+      setDemoCart([]);
+      return;
+    }
+
+    // Optimistic clear
+    setAuthCart([]);
+    authCartRef.current = [];
+    setAuthCartSubtotal(0);
+
+    const op = async () => {
+      try {
+        setCartError(null);
+        const res = await cartApi.clearCart();
+        const uiItems = res.items.map(mapBackendCartItemToUi);
+        setAuthCart(uiItems);
+        authCartRef.current = uiItems;
+        setAuthCartSubtotal(res.subtotalAmount);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to clear cart';
+        setCartError(msg);
+        try {
+          const refreshed = await cartApi.getCart();
+          const uiItems = refreshed.items.map(mapBackendCartItemToUi);
+          setAuthCart(uiItems);
+          authCartRef.current = uiItems;
+          setAuthCartSubtotal(refreshed.subtotalAmount);
+        } catch {
+          // Keep current state
+        }
+        throw err;
+      }
+    };
+
+    const nextQueue = cartQueueRef.current.then(op, op);
+    cartQueueRef.current = nextQueue.catch(() => {});
+    return nextQueue;
   };
 
+  const cart = authMode === 'AUTHENTICATED' ? authCart : demoCart;
   const cartTotalCount = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const cartSubtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const cartSubtotal =
+    authMode === 'AUTHENTICATED'
+      ? authCartSubtotal
+      : demoCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-  const toggleWishlist = (productId: string) => {
-    setWishlist((prev) =>
+  const wishlist = authMode === 'AUTHENTICATED' ? authWishlistIds : demoWishlist;
+  const wishlistProducts =
+    authMode === 'AUTHENTICATED'
+      ? authWishlistProducts
+      : DEMO_PRODUCTS.filter((p: Product) => demoWishlist.includes(p.id));
+
+  const toggleWishlist = async (productId: string) => {
+    if (authMode === 'AUTHENTICATED') {
+      const alreadyIn = authWishlistIdsRef.current.includes(productId);
+
+      if (alreadyIn) {
+        // Optimistic UI removal
+        setAuthWishlistIds((prev) => prev.filter((id) => id !== productId));
+        setAuthWishlistProducts((prev) => prev.filter((p) => p.id !== productId));
+        authWishlistIdsRef.current = authWishlistIdsRef.current.filter((id) => id !== productId);
+        authWishlistProductsRef.current = authWishlistProductsRef.current.filter((p) => p.id !== productId);
+
+        const runOp = async () => {
+          try {
+            const res = await wishlistApi.removeFromWishlist(productId);
+            setAuthWishlistIds(res.items.map((i) => i.productId));
+            setAuthWishlistProducts(res.items.map(mapWishlistItemToProduct));
+            authWishlistIdsRef.current = res.items.map((i) => i.productId);
+            authWishlistProductsRef.current = res.items.map(mapWishlistItemToProduct);
+            setWishlistError(null);
+          } catch (err) {
+            // Handle 404: item already removed on server
+            if (err instanceof ApiError && err.statusCode === 404) {
+              try {
+                const refreshed = await wishlistApi.getWishlist();
+                setAuthWishlistIds(refreshed.items.map((i) => i.productId));
+                setAuthWishlistProducts(refreshed.items.map(mapWishlistItemToProduct));
+                authWishlistIdsRef.current = refreshed.items.map((i) => i.productId);
+                authWishlistProductsRef.current = refreshed.items.map(mapWishlistItemToProduct);
+                setWishlistError(null);
+              } catch {
+                // If refresh fails, keep current optimistic state
+              }
+              return;
+            }
+
+            // Specific delta rollback: re-add only this product if still absent
+            setAuthWishlistIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]));
+            authWishlistIdsRef.current = authWishlistIdsRef.current.includes(productId)
+              ? authWishlistIdsRef.current
+              : [...authWishlistIdsRef.current, productId];
+
+            const msg = err instanceof Error ? err.message : 'Failed to update wishlist on server';
+            setWishlistError(msg);
+            throw err;
+          }
+        };
+
+        const currentQueue = wishlistQueueRef.current.then(runOp, runOp);
+        wishlistQueueRef.current = currentQueue.catch(() => {});
+        return currentQueue;
+      } else {
+        // Optimistic UI add
+        setAuthWishlistIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]));
+        if (!authWishlistIdsRef.current.includes(productId)) {
+          authWishlistIdsRef.current = [...authWishlistIdsRef.current, productId];
+        }
+
+        const runOp = async () => {
+          try {
+            const res = await wishlistApi.addToWishlist({ productId });
+            setAuthWishlistIds(res.items.map((i) => i.productId));
+            setAuthWishlistProducts(res.items.map(mapWishlistItemToProduct));
+            authWishlistIdsRef.current = res.items.map((i) => i.productId);
+            authWishlistProductsRef.current = res.items.map(mapWishlistItemToProduct);
+            setWishlistError(null);
+          } catch (err) {
+            // Specific delta rollback: remove only this product if it was optimistically added
+            setAuthWishlistIds((prev) => prev.filter((id) => id !== productId));
+            setAuthWishlistProducts((prev) => prev.filter((p) => p.id !== productId));
+            authWishlistIdsRef.current = authWishlistIdsRef.current.filter((id) => id !== productId);
+            authWishlistProductsRef.current = authWishlistProductsRef.current.filter((p) => p.id !== productId);
+
+            const msg = err instanceof Error ? err.message : 'Failed to add item to wishlist';
+            setWishlistError(msg);
+            throw err;
+          }
+        };
+
+        const currentQueue = wishlistQueueRef.current.then(runOp, runOp);
+        wishlistQueueRef.current = currentQueue.catch(() => {});
+        return currentQueue;
+      }
+    }
+
+    // Demo Mode toggle
+    setDemoWishlist((prev) =>
       prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
     );
   };
 
+  const removeFromWishlist = async (productId: string) => {
+    if (authMode === 'AUTHENTICATED') {
+      // Optimistic UI removal
+      setAuthWishlistIds((prev) => prev.filter((id) => id !== productId));
+      setAuthWishlistProducts((prev) => prev.filter((p) => p.id !== productId));
+      authWishlistIdsRef.current = authWishlistIdsRef.current.filter((id) => id !== productId);
+      authWishlistProductsRef.current = authWishlistProductsRef.current.filter((p) => p.id !== productId);
+
+      const runOp = async () => {
+        try {
+          const res = await wishlistApi.removeFromWishlist(productId);
+          setAuthWishlistIds(res.items.map((i) => i.productId));
+          setAuthWishlistProducts(res.items.map(mapWishlistItemToProduct));
+          authWishlistIdsRef.current = res.items.map((i) => i.productId);
+          authWishlistProductsRef.current = res.items.map(mapWishlistItemToProduct);
+          setWishlistError(null);
+        } catch (err) {
+          // Handle 404: item already removed on server
+          if (err instanceof ApiError && err.statusCode === 404) {
+            try {
+              const refreshed = await wishlistApi.getWishlist();
+              setAuthWishlistIds(refreshed.items.map((i) => i.productId));
+              setAuthWishlistProducts(refreshed.items.map(mapWishlistItemToProduct));
+              authWishlistIdsRef.current = refreshed.items.map((i) => i.productId);
+              authWishlistProductsRef.current = refreshed.items.map(mapWishlistItemToProduct);
+              setWishlistError(null);
+            } catch {
+              // If refresh fails, keep current optimistic state
+            }
+            return;
+          }
+
+          // Delta rollback: restore only this product
+          setAuthWishlistIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]));
+          authWishlistIdsRef.current = authWishlistIdsRef.current.includes(productId)
+            ? authWishlistIdsRef.current
+            : [...authWishlistIdsRef.current, productId];
+
+          const msg = err instanceof Error ? err.message : 'Failed to remove item from wishlist';
+          setWishlistError(msg);
+          throw err;
+        }
+      };
+
+      const currentQueue = wishlistQueueRef.current.then(runOp, runOp);
+      wishlistQueueRef.current = currentQueue.catch(() => {});
+      return currentQueue;
+    }
+
+    // Demo Mode removal
+    setDemoWishlist((prev) => prev.filter((id) => id !== productId));
+  };
+
+  const clearWishlist = async () => {
+    if (authMode === 'AUTHENTICATED') {
+      const snapshotIds = [...authWishlistIdsRef.current];
+      const snapshotProducts = [...authWishlistProductsRef.current];
+
+      setAuthWishlistIds([]);
+      setAuthWishlistProducts([]);
+      authWishlistIdsRef.current = [];
+      authWishlistProductsRef.current = [];
+
+      const runOp = async () => {
+        try {
+          await wishlistApi.clearWishlist();
+          setWishlistError(null);
+        } catch (err) {
+          // On clear failure, only restore snapshot if queue hasn't had later updates
+          if (authWishlistIdsRef.current.length === 0) {
+            setAuthWishlistIds(snapshotIds);
+            setAuthWishlistProducts(snapshotProducts);
+            authWishlistIdsRef.current = snapshotIds;
+            authWishlistProductsRef.current = snapshotProducts;
+          }
+          const msg = err instanceof Error ? err.message : 'Failed to clear wishlist';
+          setWishlistError(msg);
+          throw err;
+        }
+      };
+
+      const currentQueue = wishlistQueueRef.current.then(runOp, runOp);
+      wishlistQueueRef.current = currentQueue.catch(() => {});
+      return currentQueue;
+    }
+
+    // Demo Mode clear
+    setDemoWishlist([]);
+  };
+
   const isInWishlist = (productId: string) => wishlist.includes(productId);
+
 
   const updateUserProfile = async (profile: Partial<UserProfile>) => {
     if (user) {
@@ -448,9 +1091,26 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId(id);
   };
 
-  const placeOrder = (): Order => {
+  const placeOrder = async (notes?: string, checkoutAttemptId?: string): Promise<Order> => {
     const chosenAddress = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
 
+    if (authMode === 'AUTHENTICATED' && checkoutAttemptId) {
+      const res = await checkoutApi.placeOrder({
+        checkoutAttemptId,
+        notes,
+      });
+      const uiOrder = mapBackendOrderToUi(res.order);
+      setOrders((prev) => [uiOrder, ...prev]);
+      // Authoritative clear
+      try {
+        await clearCart();
+      } catch {
+        // Ignored if backend cart was already cleared by order placement
+      }
+      return uiOrder;
+    }
+
+    // Demo Mode in-memory order placement
     // Group cart items by seller
     const packagesMap = new Map<string, CartItem[]>();
     cart.forEach((item) => {
@@ -500,6 +1160,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     <MarketplaceContext.Provider
       value={{
         cart,
+        cartLoading,
+        cartError,
+        fetchCart,
         addToCart,
         updateCartQuantity,
         removeFromCart,
@@ -507,11 +1170,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         cartTotalCount,
         cartSubtotal,
         wishlist,
+        wishlistProducts,
+        wishlistLoading,
+        wishlistError,
+        fetchWishlist,
         toggleWishlist,
+        removeFromWishlist,
+        clearWishlist,
         isInWishlist,
         user,
         setUser,
         updateUserProfile,
+
         authMode,
         authUser,
         setAuthenticatedSession,

@@ -74,6 +74,11 @@ export interface CartItem {
   price: number;
   sellerId: string;
   sellerName: string;
+  variantId?: string;
+  mrp?: number;
+  lineTotal?: number;
+  isAvailable?: boolean;
+  availableStock?: number;
 }
 
 export interface Address {
@@ -273,3 +278,258 @@ export interface DeleteAddressResponse {
   deletedId: string;
   replacementDefaultId: string | null;
 }
+
+// Backend Wishlist Types & Contracts
+export interface BackendWishlistProduct {
+  id: string;
+  title: string;
+  slug: string;
+  brand: string | null;
+  status: string;
+  thumbnailUrl: string | null;
+  shop: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+  };
+  category: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  pricing: {
+    minPrice: number;
+    maxPrice: number;
+    minMrp: number;
+    maxMrp: number;
+    currency: string;
+  };
+  availability: {
+    isInStock: boolean;
+    totalAvailableStock: number;
+    isAvailableForPurchase: boolean;
+  };
+  variantCount: number;
+}
+
+export interface BackendWishlistItem {
+  id: string;
+  productId: string;
+  addedAt: string;
+  product: BackendWishlistProduct;
+}
+
+export interface BackendWishlistResponse {
+  userId: string;
+  totalItems: number;
+  items: BackendWishlistItem[];
+}
+
+export interface AddToWishlistPayload {
+  productId: string;
+}
+
+export interface ClearWishlistResponse {
+  message?: string;
+  userId: string;
+  totalItems: number;
+  items: BackendWishlistItem[];
+}
+
+// Backend Cart Types & Contracts
+export interface BackendCartVariant {
+  sku: string;
+  title: string;
+  attributes: Record<string, unknown>;
+  isActive: boolean;
+}
+
+export interface BackendCartProduct {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  thumbnailUrl: string | null;
+}
+
+export interface BackendCartShop {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+}
+
+export interface BackendCartItem {
+  id: string;
+  variantId: string;
+  quantity: number;
+  unitPrice: number;
+  mrp: number;
+  lineTotal: number;
+  isAvailable: boolean;
+  availableStock: number;
+  variant: BackendCartVariant;
+  product: BackendCartProduct;
+  shop: BackendCartShop;
+}
+
+export interface BackendCartResponse {
+  cartId: string;
+  userId: string;
+  items: BackendCartItem[];
+  totalItems: number;
+  subtotalAmount: number;
+  currency: string;
+  message?: string;
+}
+
+export interface AddToCartPayload {
+  variantId: string;
+  quantity: number;
+}
+
+export interface UpdateCartItemPayload {
+  quantity: number;
+}
+
+// Backend Checkout Types & Contracts
+export interface CheckoutItemValidationResult {
+  variantId: string;
+  productId: string;
+  shopId: string;
+  shopName: string;
+  productTitle: string;
+  variantTitle: string;
+  sku: string;
+  quantity: number;
+  unitPrice: number;
+  mrp: number;
+  lineSubtotal: number;
+  availableStock: number;
+  isAvailable: boolean;
+  gstRate: number | null;
+  taxStatus: 'CONFIGURED' | 'UNCONFIGURED';
+  rejectionReason?: string;
+}
+
+export interface CheckoutValidationResponse {
+  isValid: boolean;
+  canProceedToCheckout: boolean;
+  currency: string;
+  cartId: string;
+  totalItems: number;
+  totalQuantity: number;
+  subtotalAmount: number;
+  taxAmount: number | null;
+  taxStatus: 'CONFIGURED' | 'UNCONFIGURED';
+  items: CheckoutItemValidationResult[];
+  errors: string[];
+}
+
+export interface AddressSnapshotPayload {
+  fullName: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  landmark?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}
+
+export interface ReserveCheckoutPayload {
+  idempotencyKey: string;
+  shippingAddress: AddressSnapshotPayload;
+  billingAddress?: AddressSnapshotPayload;
+}
+
+export interface BackendCheckoutAttemptItem {
+  id: string;
+  checkoutAttemptId: string;
+  variantId: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface BackendCheckoutAttempt {
+  id: string;
+  userId: string;
+  idempotencyKey: string;
+  status: 'INITIATED' | 'STOCK_RESERVED' | 'PAYMENT_PENDING' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED';
+  subtotalAmount: number;
+  taxAmount: number;
+  shippingFee: number;
+  discountAmount: number;
+  totalAmount: number;
+  currency: string;
+  expiresAt: string;
+  orderId?: string | null;
+  items?: BackendCheckoutAttemptItem[];
+}
+
+export interface ReserveCheckoutResponse {
+  message: string;
+  isExisting: boolean;
+  checkoutAttempt: BackendCheckoutAttempt;
+}
+
+export interface PlaceOrderPayload {
+  checkoutAttemptId: string;
+  notes?: string;
+}
+
+export interface BackendSellerOrderItem {
+  id: string;
+  variantId: string;
+  productTitleSnapshot: string;
+  skuSnapshot: string;
+  quantity: number;
+  unitPriceSnapshot: number;
+  discountSnapshot: number;
+  totalAmount: number;
+}
+
+export interface BackendSellerOrder {
+  id: string;
+  subOrderNumber: string;
+  shop: {
+    id: string;
+    name: string;
+    slug?: string;
+  };
+  status: string;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  items: BackendSellerOrderItem[];
+}
+
+export interface BackendOrder {
+  id: string;
+  orderNumber: string;
+  status: string;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  shippingAddressSnapshot: AddressSnapshotPayload;
+  billingAddressSnapshot?: AddressSnapshotPayload;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  sellerOrders?: BackendSellerOrder[];
+}
+
+export interface PlaceOrderResponse {
+  message: string;
+  isExisting: boolean;
+  order: BackendOrder;
+}
+
+
