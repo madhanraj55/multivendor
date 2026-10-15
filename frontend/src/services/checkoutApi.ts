@@ -5,12 +5,55 @@ import type {
   ReserveCheckoutResponse,
   PlaceOrderPayload,
   PlaceOrderResponse,
+  CheckoutRecoveryResponse,
   Address,
   AddressSnapshotPayload,
   BackendOrder,
   Order,
   OrderPackage,
 } from '../types/index.ts';
+
+export const CHECKOUT_RECOVERY_STORAGE_KEY = 'bb_pending_checkout';
+
+export interface StoredCheckoutRecovery {
+  attemptId: string;
+  idempotencyKey?: string;
+  timestamp: number;
+}
+
+export function savePendingCheckoutAttempt(attemptId: string, idempotencyKey?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const data: StoredCheckoutRecovery = {
+      attemptId,
+      idempotencyKey,
+      timestamp: Date.now(),
+    };
+    sessionStorage.setItem(CHECKOUT_RECOVERY_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore storage quota or access issues
+  }
+}
+
+export function getPendingCheckoutAttempt(): StoredCheckoutRecovery | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(CHECKOUT_RECOVERY_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingCheckoutAttempt(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(CHECKOUT_RECOVERY_STORAGE_KEY);
+  } catch {
+    // Ignore storage quota or access issues
+  }
+}
 
 /**
  * Generates an idempotency key format satisfying backend MaxLength(100).
@@ -46,7 +89,9 @@ export function mapBackendOrderToUi(backendOrder: BackendOrder): Order {
     sellerName: so.shop.name,
     trackingNumber: so.subOrderNumber,
     packageStatus:
-      so.status === 'DELIVERED'
+      so.status === 'PENDING_PAYMENT'
+        ? 'PENDING_PAYMENT'
+        : so.status === 'DELIVERED'
         ? 'DELIVERED'
         : so.status === 'SHIPPED'
         ? 'SHIPPED'
@@ -101,10 +146,10 @@ export function mapBackendOrderToUi(backendOrder: BackendOrder): Order {
   };
 
   const statusMap: Record<string, Order['status']> = {
+    PENDING_PAYMENT: 'PENDING_PAYMENT',
     COMPLETED: 'CONFIRMED',
     CONFIRMED: 'CONFIRMED',
     PROCESSING: 'PLACED',
-    PENDING_PAYMENT: 'PLACED',
     SHIPPED: 'SHIPPED',
     OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
     DELIVERED: 'DELIVERED',
@@ -157,6 +202,16 @@ export const checkoutApi = {
     return apiClient.request<PlaceOrderResponse>('/checkout/place-order', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * GET /api/v1/checkout/attempt/:attemptId
+   * Safe read-only recovery of a checkout attempt and any associated order.
+   */
+  async getCheckoutAttempt(attemptId: string): Promise<CheckoutRecoveryResponse> {
+    return apiClient.request<CheckoutRecoveryResponse>(`/checkout/attempt/${attemptId}`, {
+      method: 'GET',
     });
   },
 };

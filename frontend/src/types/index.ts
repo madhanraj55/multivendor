@@ -105,12 +105,21 @@ export interface OrderPackage {
   sellerId: string;
   sellerName: string;
   trackingNumber: string;
-  packageStatus: 'PROCESSING' | 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+  packageStatus: 'PENDING_PAYMENT' | 'PROCESSING' | 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
   estimatedDelivery: string;
   items: OrderItem[];
 }
 
-export type OrderStatus = 'PLACED' | 'CONFIRMED' | 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+export type OrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'PLACED'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'PARTIALLY_SHIPPED'
+  | 'SHIPPED'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'CANCELLED';
 
 export interface Order {
   id: string;
@@ -531,5 +540,627 @@ export interface PlaceOrderResponse {
   isExisting: boolean;
   order: BackendOrder;
 }
+
+export interface CheckoutRecoveryResponse {
+  id: string;
+  status: 'INITIATED' | 'STOCK_RESERVED' | 'PAYMENT_PENDING' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED';
+  isExpired: boolean;
+  isExisting: boolean;
+  expiresAt: string;
+  order?: BackendOrder | null;
+}
+
+export interface CheckoutRecoveryRecord {
+  attemptId: string;
+  idempotencyKey?: string;
+  timestamp: number;
+}
+
+export interface CustomerSellerOrderSummary {
+  subOrderNumber: string;
+  shopName: string;
+  shopSlug: string;
+  status: string;
+  totalAmount: number;
+  itemCount: number;
+  deliveryType: string;
+}
+
+export interface CustomerOrderSummary {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus?: string;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  sellerOrdersCount: number;
+  sellerOrders: CustomerSellerOrderSummary[];
+}
+
+export interface CustomerOrderListResponse {
+  data: CustomerOrderSummary[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface CustomerOrderDetailItem {
+  id: string;
+  variantId: string;
+  productTitle?: string;
+  productTitleSnapshot?: string;
+  sku?: string;
+  skuSnapshot?: string;
+  attributes?: Record<string, string | number | boolean>;
+  quantity: number;
+  unitPrice?: number;
+  unitPriceSnapshot?: number;
+  discount?: number;
+  discountSnapshot?: number;
+  gstRate?: number | null;
+  gstRateSnapshot?: number | null;
+  taxAmount?: number;
+  taxAmountSnapshot?: number;
+  totalAmount: number;
+}
+
+export interface CustomerOrderDetailSellerOrder {
+  id: string;
+  subOrderNumber: string;
+  status: string;
+  shop: {
+    id: string;
+    name: string;
+    slug?: string;
+  };
+  subtotalAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  deliveryType?: string;
+  items: CustomerOrderDetailItem[];
+  statusHistory?: Array<Record<string, unknown>>;
+}
+
+export interface CustomerOrderDetailResponse {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus?: string;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  shippingAddress?: AddressSnapshotPayload;
+  shippingAddressSnapshot?: AddressSnapshotPayload;
+  billingAddress?: AddressSnapshotPayload;
+  billingAddressSnapshot?: AddressSnapshotPayload;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  statusHistory?: Array<Record<string, unknown>>;
+  sellerOrders: CustomerOrderDetailSellerOrder[];
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN ORDER INTERFACES & CONTRACTS
+// ---------------------------------------------------------------------------
+
+export interface AdminOrderQuery {
+  page?: number;
+  limit?: number;
+  status?: OrderStatus;
+  customerId?: string;
+  orderNumber?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface AdminOrderCustomer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+}
+
+export interface AdminOrderSellerSummary {
+  subOrderNumber: string;
+  shopName: string;
+  shopSlug: string;
+  status: string;
+  totalAmount: number;
+  itemCount: number;
+  deliveryType: string;
+}
+
+export interface AdminOrderListItem {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  customer: AdminOrderCustomer;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  sellerOrdersCount: number;
+  sellerOrders: AdminOrderSellerSummary[];
+}
+
+export interface AdminOrderListResponse {
+  data: AdminOrderListItem[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface AdminOrderDetailCustomer extends AdminOrderCustomer {
+  role?: string;
+  status?: string;
+  createdAt?: string;
+}
+
+export interface AdminOrderItem {
+  id: string;
+  variantId: string;
+  productTitle: string;
+  sku: string;
+  attributes?: Record<string, unknown> | null;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  gstRate: number | null;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface AdminOrderStatusHistory {
+  id: string;
+  status: string;
+  notes: string | null;
+  changedBy: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    role?: string;
+  } | null;
+  createdAt: string;
+}
+
+export interface AdminOrderSellerOrder {
+  id: string;
+  subOrderNumber: string;
+  shop: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    sellerId: string;
+    seller?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string | null;
+    };
+  };
+  status: string;
+  deliveryType: string;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  commissionAmount?: number;
+  netSellerPayable?: number;
+  cancellationReason?: string | null;
+  deliveredAt?: string | null;
+  items: AdminOrderItem[];
+  statusHistory: AdminOrderStatusHistory[];
+}
+
+export interface AdminOrderDetailResponse {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  customer: AdminOrderDetailCustomer;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  notes?: string | null;
+  shippingAddress?: AddressSnapshotPayload | null;
+  billingAddress?: AddressSnapshotPayload | null;
+  createdAt: string;
+  updatedAt: string;
+  paymentSummary: {
+    orderStatus: OrderStatus;
+    checkoutAttempt: {
+      id: string;
+      status: string;
+      idempotencyKey: string;
+      expiresAt: string;
+      createdAt: string;
+    } | null;
+    totalPayable: number;
+    currency: string;
+  };
+  statusHistory: AdminOrderStatusHistory[];
+  sellerOrdersCount: number;
+  sellerOrders: AdminOrderSellerOrder[];
+}
+
+export interface AdminSubOrdersResponse {
+  orderNumber: string;
+  orderStatus: OrderStatus;
+  totalSubOrders: number;
+  subOrders: Array<{
+    id: string;
+    subOrderNumber: string;
+    shop: {
+      id: string;
+      name: string;
+      slug: string;
+      status: string;
+      sellerId: string;
+      seller?: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+      };
+    };
+    status: string;
+    deliveryType: string;
+    totalAmount: number;
+    netSellerPayable: number;
+    cancellationReason?: string | null;
+    deliveredAt?: string | null;
+    itemsCount: number;
+    items: Array<{
+      id: string;
+      variantId: string;
+      productTitle: string;
+      sku: string;
+      attributes?: Record<string, unknown> | null;
+      quantity: number;
+      unitPrice: number;
+      totalAmount: number;
+    }>;
+    statusHistory: AdminOrderStatusHistory[];
+  }>;
+}
+
+export interface AdminUpdateOrderStatusPayload {
+  status: OrderStatus;
+  notes?: string;
+}
+
+export interface AdminUpdateOrderStatusResponse {
+  message: string;
+  orderNumber: string;
+  previousStatus: OrderStatus;
+  status: OrderStatus;
+}
+
+// ---------------------------------------------------------------------------
+// SELLER ORDER INTERFACES & CONTRACTS
+// ---------------------------------------------------------------------------
+
+export type SellerOrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'PACKED'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED'
+  | 'RETURN_REQUESTED'
+  | 'RETURNED';
+
+export interface QuerySellerOrdersParams {
+  page?: number;
+  limit?: number;
+  status?: SellerOrderStatus;
+}
+
+export interface SellerOrderListItem {
+  id: string;
+  subOrderNumber: string;
+  parentOrderNumber: string;
+  status: SellerOrderStatus;
+  subtotalAmount: number;
+  totalAmount: number;
+  netSellerPayable: number;
+  currency: string;
+  deliveryType: string;
+  itemCount: number;
+  createdAt: string;
+  items: Array<{
+    id: string;
+    title: string;
+    sku: string;
+    quantity: number;
+    totalAmount: number;
+  }>;
+}
+
+export interface SellerOrderListResponse {
+  shop: {
+    id: string;
+    name: string;
+  };
+  data: SellerOrderListItem[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface SellerOrderDetailItem {
+  id: string;
+  variantId: string;
+  productTitle: string;
+  sku: string;
+  attributes?: Record<string, unknown> | null;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  gstRate: number | null;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface SellerOrderDetailResponse {
+  id: string;
+  subOrderNumber: string;
+  parentOrderNumber: string;
+  status: SellerOrderStatus;
+  subtotalAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  commissionAmount: number;
+  netSellerPayable: number;
+  currency: string;
+  deliveryType: string;
+  cancellationReason: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  shippingAddress: AddressSnapshotPayload | null;
+  statusHistory: Array<{
+    status: string;
+    notes: string | null;
+    createdAt: string;
+  }>;
+  items: SellerOrderDetailItem[];
+}
+
+export interface UpdateSellerOrderStatusPayload {
+  status: SellerOrderStatus;
+  notes?: string;
+}
+
+export interface UpdateSellerOrderStatusResponse {
+  message: string;
+  subOrderNumber: string;
+  previousStatus: SellerOrderStatus;
+  status: SellerOrderStatus;
+  deliveredAt?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// SELLER PRODUCT MANAGEMENT & CATEGORY CONTRACTS
+// ---------------------------------------------------------------------------
+
+export type ProductStatus = 'DRAFT' | 'PUBLISHED' | 'INACTIVE' | 'ARCHIVED';
+
+export type ShopStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+
+export interface BackendCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  parentId: string | null;
+  hsnCode?: string | null;
+  defaultGstRate?: number | string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+  children?: BackendCategory[];
+  parent?: BackendCategory | null;
+}
+
+export interface SellerProductInventory {
+  id: string;
+  variantId: string;
+  availableQuantity: number;
+  reservedQuantity: number;
+  lowStockThreshold: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SellerProductImage {
+  id: string;
+  productId: string;
+  url: string;
+  altText: string | null;
+  sortOrder: number;
+  isThumbnail: boolean;
+  createdAt: string;
+}
+
+export interface SellerProductVariant {
+  id: string;
+  productId: string;
+  sku: string;
+  title: string;
+  mrp: number;
+  price: number;
+  attributes: Record<string, unknown>;
+  weightGrams: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  inventory?: SellerProductInventory | null;
+}
+
+export interface SellerProductItem {
+  id: string;
+  shopId: string;
+  categoryId: string;
+  category?: {
+    id: string;
+    name: string;
+    slug?: string;
+  };
+  title: string;
+  slug: string;
+  description: string;
+  brand: string | null;
+  status: ProductStatus;
+  hsnCode: string | null;
+  gstRate?: number | string | null;
+  isReturnable: boolean;
+  returnWindowDays: number;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  createdAt: string;
+  updatedAt: string;
+  images: SellerProductImage[];
+  variants: SellerProductVariant[];
+}
+
+export interface CreateProductVariantPayload {
+  sku: string;
+  title: string;
+  mrp: number;
+  price: number;
+  attributes: Record<string, unknown>;
+  weightGrams?: number;
+  initialStock?: number;
+  lowStockThreshold?: number;
+}
+
+export interface CreateProductImagePayload {
+  url: string;
+  altText?: string;
+  sortOrder?: number;
+  isThumbnail?: boolean;
+}
+
+export interface CreateProductPayload {
+  categoryId: string;
+  title: string;
+  description: string;
+  brand?: string;
+  hsnCode?: string;
+  isReturnable?: boolean;
+  returnWindowDays?: number;
+  metaTitle?: string;
+  metaDescription?: string;
+  variants: CreateProductVariantPayload[];
+  images?: CreateProductImagePayload[];
+}
+
+export interface UpdateProductPayload {
+  categoryId?: string;
+  title?: string;
+  description?: string;
+  brand?: string;
+  status?: ProductStatus;
+  hsnCode?: string;
+  isReturnable?: boolean;
+  returnWindowDays?: number;
+  metaTitle?: string;
+  metaDescription?: string;
+}
+
+export interface UpdateProductVariantPayload {
+  sku?: string;
+  title?: string;
+  mrp?: number;
+  price?: number;
+  attributes?: Record<string, unknown>;
+  weightGrams?: number;
+}
+
+export interface UpdateVariantStatusPayload {
+  isActive: boolean;
+}
+
+export interface UpdateVariantStatusResponse {
+  message: string;
+  variant: SellerProductVariant;
+}
+
+export interface DeleteVariantResponse {
+  action: 'DEACTIVATED' | 'DELETED';
+  message: string;
+  variant: SellerProductVariant;
+}
+
+export interface AddProductImagePayload {
+  url: string;
+  altText?: string;
+  sortOrder?: number;
+  isThumbnail?: boolean;
+}
+
+export interface UpdateProductImagePayload {
+  url?: string;
+  altText?: string;
+  sortOrder?: number;
+  isThumbnail?: boolean;
+}
+
+export interface DeleteProductImageResponse {
+  message: string;
+}
+
+export interface AdjustStockPayload {
+  variantId: string;
+  quantity: number;
+  referenceId?: string;
+  notes?: string;
+}
+
+export interface UploadProductImageResponse {
+  url: string;
+  filename: string;
+  originalName: string;
+  size: number;
+  mimeType: string;
+}
+
+
+
 
 

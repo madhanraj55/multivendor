@@ -1,9 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import { EmptyState } from '../components/common/StateViews.tsx';
 import type { CartItem, CheckoutValidationResponse, BackendCheckoutAttempt } from '../types/index.ts';
-import { checkoutApi, mapAddressToSnapshot, generateCheckoutIdempotencyKey } from '../services/checkoutApi.ts';
+import {
+  checkoutApi,
+  mapAddressToSnapshot,
+  generateCheckoutIdempotencyKey,
+  mapBackendOrderToUi,
+  getPendingCheckoutAttempt,
+  savePendingCheckoutAttempt,
+  clearPendingCheckoutAttempt,
+} from '../services/checkoutApi.ts';
 import './CheckoutPage.css';
 
 export function CheckoutPage() {
@@ -14,6 +22,7 @@ export function CheckoutPage() {
     selectedAddressId,
     setSelectedAddressId,
     placeOrder,
+    recordOrder,
     authMode,
     authUser,
   } = useMarketplace();
@@ -23,6 +32,10 @@ export function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'UPI' | 'CARD' | 'NETBANKING'>('COD');
   const [orderNotes, setOrderNotes] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const [recoveryPendingAttemptId, setRecoveryPendingAttemptId] = useState<string | null>(null);
+  const recoveryCheckedRef = useRef(false);
   const [isValidating, setIsValidating] = useState<boolean>(() => {
     return authMode === 'AUTHENTICATED' && cart.length > 0;
   });
@@ -114,7 +127,74 @@ export function CheckoutPage() {
     return () => clearInterval(timer);
   }, [checkoutAttempt?.expiresAt]);
 
-  if (cart.length === 0) {
+  // Check for pending recovery record on mount (e.g. after customer reloads browser)
+  useEffect(() => {
+    let isCancelled = false;
+    const pending = getPendingCheckoutAttempt();
+
+    if (authMode === 'AUTHENTICATED' && pending?.attemptId && !recoveryCheckedRef.current) {
+      recoveryCheckedRef.current = true;
+      setIsRecovering(true);
+      setRecoveryPendingAttemptId(pending.attemptId);
+
+      checkoutApi
+        .getCheckoutAttempt(pending.attemptId)
+        .then((res) => {
+          if (isCancelled) return;
+          if (res.status === 'COMPLETED' && res.order) {
+            clearPendingCheckoutAttempt();
+            const uiOrder = mapBackendOrderToUi(res.order);
+            recordOrder(uiOrder);
+            navigate(`/orders?orderId=${uiOrder.orderNumber || uiOrder.id}`);
+          } else if (res.status === 'STOCK_RESERVED' && !res.isExpired) {
+            setRecoveryPendingAttemptId(res.id);
+            setRecoveryNotice(
+              'We restored your active reservation session. You may review your details and confirm order placement.'
+            );
+          } else if (res.isExpired || res.status === 'EXPIRED') {
+            clearPendingCheckoutAttempt();
+            setRecoveryPendingAttemptId(null);
+            setReservationExpired(true);
+            setRecoveryNotice(
+              'Your previous checkout reservation has expired. Please initiate a fresh checkout to reserve current inventory.'
+            );
+          } else {
+            clearPendingCheckoutAttempt();
+            setRecoveryPendingAttemptId(null);
+          }
+        })
+        .catch(() => {
+          if (isCancelled) return;
+          // Retain pending recovery record on network failure so customer can retry
+          setRecoveryNotice(
+            'We encountered a connection issue while verifying your previous order status. Please use the button below to check your order status.'
+          );
+        })
+        .finally(() => {
+          if (!isCancelled) {
+            setIsRecovering(false);
+          }
+        });
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authMode, navigate, recordOrder]);
+
+  if (isRecovering) {
+    return (
+      <div className="bb-container bb-checkout-container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔄</div>
+        <h2>Checking Order Status...</h2>
+        <p style={{ color: '#6b7280', maxWidth: '480px', margin: '0.5rem auto 1.5rem' }}>
+          Verifying whether an order was already created for your checkout session. Please hold on.
+        </p>
+      </div>
+    );
+  }
+
+  if (cart.length === 0 && !recoveryPendingAttemptId) {
     return (
       <div className="bb-container bb-checkout-container">
         <EmptyState
@@ -179,10 +259,16 @@ export function CheckoutPage() {
           setCheckoutAttempt(activeAttempt);
         }
 
+        // Persist recovery record BEFORE dispatching place-order request
+        savePendingCheckoutAttempt(activeAttempt.id, reservationIdempotencyKey);
+        setRecoveryPendingAttemptId(activeAttempt.id);
+
         // Step 2: Order Placement (POST /api/v1/checkout/place-order)
         const createdOrder = await placeOrder(orderNotes.trim() || undefined, activeAttempt.id);
         
-        // Reset idempotency key after order success
+        // Reset recovery record and idempotency key only after verified order success
+        clearPendingCheckoutAttempt();
+        setRecoveryPendingAttemptId(null);
         setReservationIdempotencyKey(generateCheckoutIdempotencyKey());
         setCheckoutAttempt(null);
         navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
@@ -194,12 +280,16 @@ export function CheckoutPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to place order';
       setActionError(msg);
-      // If error indicates expiry or validation problem, reset attempt and key
+      // If error indicates expiry or validation problem, reset attempt, key, and recovery record
       if (msg.toLowerCase().includes('expired')) {
+        clearPendingCheckoutAttempt();
+        setRecoveryPendingAttemptId(null);
         setReservationExpired(true);
         setCheckoutAttempt(null);
         setReservationIdempotencyKey(generateCheckoutIdempotencyKey());
       }
+      // On network failure or dropped response, RETAIN the recovery record
+      // so user can retry or check status without creating duplicate reservations/orders
     } finally {
       setIsPlacing(false);
     }
@@ -413,7 +503,54 @@ export function CheckoutPage() {
         {/* Right Column: Order Total & Final Action */}
         <aside>
           <div className="bb-checkout-summary-card">
-            <h3 className="bb-summary-title">Payment Summary</h3>
+            {recoveryNotice && (
+              <div
+                role="alert"
+                style={{
+                  padding: '0.75rem',
+                  marginBottom: '1rem',
+                  borderRadius: '6px',
+                  backgroundColor: '#e0f2fe',
+                  color: '#0369a1',
+                  fontSize: '0.85rem',
+                }}
+              >
+                ℹ️ <strong>Order Recovery Notice:</strong> {recoveryNotice}
+                {recoveryPendingAttemptId && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="bb-btn bb-btn-sm bb-btn-outline"
+                      style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }}
+                      onClick={async () => {
+                        setIsRecovering(true);
+                        try {
+                          const res = await checkoutApi.getCheckoutAttempt(recoveryPendingAttemptId);
+                          if (res.status === 'COMPLETED' && res.order) {
+                            clearPendingCheckoutAttempt();
+                            const uiOrder = mapBackendOrderToUi(res.order);
+                            recordOrder(uiOrder);
+                            navigate(`/orders?orderId=${uiOrder.orderNumber || uiOrder.id}`);
+                          } else if (res.status === 'STOCK_RESERVED' && !res.isExpired) {
+                            setRecoveryNotice('Your reservation remains active. You can proceed with confirming your order.');
+                          } else {
+                            clearPendingCheckoutAttempt();
+                            setRecoveryPendingAttemptId(null);
+                            setReservationExpired(true);
+                          }
+                        } catch {
+                          setRecoveryNotice('Still unable to reach the server to verify attempt status. Please try again in a moment.');
+                        } finally {
+                          setIsRecovering(false);
+                        }
+                      }}
+                    >
+                      🔄 Verify Order Status Now
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {actionError && (
               <div

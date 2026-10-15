@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,8 +10,17 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import type { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import {
   CurrentUser,
   type CurrentUserPayload,
@@ -32,6 +42,17 @@ import {
   UpdateVariantStatusDto,
 } from './dto/variant-image.dto.js';
 import { ProductsService } from './products.service.js';
+
+interface UploadedMulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination: string;
+  filename: string;
+  path: string;
+}
 
 @Controller('products')
 export class ProductsController {
@@ -162,8 +183,67 @@ export class ProductsController {
   }
 
   // ===========================================================================
-  // PRODUCT IMAGE MANAGEMENT
+  // PRODUCT IMAGE MANAGEMENT & UPLOAD
   // ===========================================================================
+
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER, UserRole.ADMIN)
+  @Post('upload-image')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req: any, _file: any, cb: (err: Error | null, dest: string) => void) => {
+          const uploadPath = join(process.cwd(), 'uploads', 'products');
+          mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (_req: any, file: any, cb: (err: Error | null, name: string) => void) => {
+          const ext = extname(file.originalname).toLowerCase();
+          const uniqueId = randomUUID();
+          cb(null, `${Date.now()}-${uniqueId}${ext}`);
+        },
+      }),
+      fileFilter: (_req: any, file: any, cb: (err: Error | null, accept: boolean) => void) => {
+        const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+        const ext = extname(file.originalname).toLowerCase();
+        const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
+
+        if (!allowedMimes.includes(file.mimetype) || !allowedExts.includes(ext)) {
+          return cb(
+            new BadRequestException(
+              'Invalid image format. Only JPEG, PNG, and WebP images are allowed.',
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+      },
+    }),
+  )
+  async uploadImage(
+    @UploadedFile() file: UploadedMulterFile,
+    @Req() req: Request,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No image file provided for upload');
+    }
+
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol || 'http';
+    const publicUrl = `${protocol}://${host}/uploads/products/${file.filename}`;
+
+    return {
+      url: publicUrl,
+      filename: file.filename,
+      originalName: file.originalname,
+      size: file.size,
+      mimeType: file.mimetype,
+    };
+  }
 
   @Public()
   @Get(':id/images')

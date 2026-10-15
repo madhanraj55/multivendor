@@ -3,6 +3,9 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Get,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -75,5 +78,20 @@ export class CheckoutController {
     @Body() dto: PlaceOrderDto,
   ) {
     return this.checkoutService.placeOrder(userId, dto);
+  }
+
+  /**
+   * Safe read-only recovery endpoint:
+   * Retrieves checkout attempt status and order for the authenticated customer.
+   * If COMPLETED, safely returns the already-created order with shop relation.
+   */
+  @Roles(UserRole.CUSTOMER)
+  @Get('attempt/:attemptId')
+  @HttpCode(HttpStatus.OK)
+  async getCheckoutAttempt(
+    @CurrentUser('userId') userId: string,
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+  ) {
+    return this.checkoutService.getCheckoutAttempt(userId, attemptId);
   }
 }

@@ -12,6 +12,7 @@ export function Header() {
     pincode,
     setPincode,
     user,
+    authUser,
     authMode,
     searchQuery,
     setSearchQuery,
@@ -58,6 +59,50 @@ export function Header() {
           </div>
 
           <div className="bb-header-top-right">
+            {authUser?.role === 'ADMIN' && (
+              <>
+                <a
+                  href="/admin/orders"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/admin/orders');
+                  }}
+                  className="bb-top-link"
+                  style={{ color: '#fed7aa', fontWeight: 'bold' }}
+                >
+                  🛡️ Admin Orders
+                </a>
+                <span className="bb-top-divider">|</span>
+              </>
+            )}
+            {authUser?.role === 'SELLER' && (
+              <>
+                <a
+                  href="/seller/products"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/seller/products');
+                  }}
+                  className="bb-top-link"
+                  style={{ color: '#67e8f9', fontWeight: 'bold' }}
+                >
+                  📦 Vendor Products
+                </a>
+                <span className="bb-top-divider">|</span>
+                <a
+                  href="/seller/orders"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/seller/orders');
+                  }}
+                  className="bb-top-link"
+                  style={{ color: '#67e8f9', fontWeight: 'bold' }}
+                >
+                  🏬 Vendor Orders
+                </a>
+                <span className="bb-top-divider">|</span>
+              </>
+            )}
             <a href="#help" onClick={(e) => { e.preventDefault(); alert('Customer Care: 1800-123-9999 (9 AM - 9 PM IST)'); }} className="bb-top-link">
               24x7 Support
             </a>
@@ -141,6 +186,34 @@ export function Header() {
                 {user ? `${user.fullName.split(' ')[0]}${authMode === 'DEMO' ? ' (Demo)' : ''}` : 'Sign In'}
               </span>
             </button>
+
+            {/* Admin Orders Portal Button */}
+            {authUser?.role === 'ADMIN' && (
+              <button
+                type="button"
+                className="bb-header-btn"
+                onClick={() => navigate('/admin/orders')}
+                aria-label="Admin Orders Dashboard"
+                title="Admin Orders Dashboard"
+              >
+                <span className="bb-header-btn-icon">🛡️</span>
+                <span className="bb-header-btn-label">Admin</span>
+              </button>
+            )}
+
+            {/* Seller Orders Portal Button */}
+            {authUser?.role === 'SELLER' && (
+              <button
+                type="button"
+                className="bb-header-btn"
+                onClick={() => navigate('/seller/orders')}
+                aria-label="Vendor Orders Dashboard"
+                title="Vendor Orders Dashboard"
+              >
+                <span className="bb-header-btn-icon">🏬</span>
+                <span className="bb-header-btn-label">Vendor</span>
+              </button>
+            )}
 
             {/* Orders */}
             <button
@@ -302,6 +375,48 @@ export function Header() {
                   <span>👤 {user ? user.fullName : 'Sign In / Register'}</span>
                   <span>→</span>
                 </button>
+                {authUser?.role === 'ADMIN' && (
+                  <button
+                    type="button"
+                    className="bb-drawer-link"
+                    style={{ backgroundColor: '#fff7ed', color: '#c2410c' }}
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      navigate('/admin/orders');
+                    }}
+                  >
+                    <span>🛡️ Admin Orders Portal</span>
+                    <span>→</span>
+                  </button>
+                )}
+                {authUser?.role === 'SELLER' && (
+                  <>
+                    <button
+                      type="button"
+                      className="bb-drawer-link"
+                      style={{ backgroundColor: '#f0fdf4', color: '#166534' }}
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        navigate('/seller/products');
+                      }}
+                    >
+                      <span>📦 Vendor Products Catalogue</span>
+                      <span>→</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="bb-drawer-link"
+                      style={{ backgroundColor: '#f0fdf4', color: '#166534' }}
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        navigate('/seller/orders');
+                      }}
+                    >
+                      <span>🏬 Vendor Orders Portal</span>
+                      <span>→</span>
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   className="bb-drawer-link"

@@ -15,6 +15,9 @@ import {
   ShopStatus,
 } from '../generated/prisma/client.js';
 import { CheckoutService } from './checkout.service.js';
+import { CheckoutController } from './checkout.controller.js';
+import { ROLES_KEY } from '../auth/decorators/roles.decorator.js';
+import { UserRole } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('CheckoutService (Unit Tests)', () => {
@@ -344,7 +347,7 @@ describe('CheckoutService (Unit Tests)', () => {
       expect(err).toBeInstanceOf(ForbiddenException);
     });
 
-    it('should return existing order idempotently if checkout attempt is already COMPLETED with orderId', async () => {
+    it('should return existing order idempotently with sellerOrders.shop and without creating new order or modifying inventory if attempt is already COMPLETED', async () => {
       mockPrisma.$queryRaw.mockResolvedValueOnce([
         {
           id: 'attempt-uuid-valid',
@@ -358,14 +361,64 @@ describe('CheckoutService (Unit Tests)', () => {
       const existingOrder = {
         id: 'existing-order-id',
         orderNumber: 'ORD-20261013-111111',
-        sellerOrders: [],
+        status: OrderStatus.PENDING_PAYMENT,
+        sellerOrders: [
+          {
+            id: 'seller-ord-1',
+            subOrderNumber: 'ORD-20261013-111111-S1',
+            status: SellerOrderStatus.PENDING_PAYMENT,
+            shop: {
+              id: 'shop-1',
+              name: 'Alpha Shop',
+              slug: 'alpha-shop',
+            },
+            items: [
+              {
+                id: 'item-1',
+                variantId: 'var-1',
+                quantity: 2,
+                unitPriceSnapshot: 100,
+                totalAmount: 200,
+              },
+            ],
+          },
+        ],
       };
       mockPrisma.order.findUnique.mockResolvedValueOnce(existingOrder);
 
       const result = await service.placeOrder('user-1', validPlaceOrderDto);
+
       expect(result.isExisting).toBe(true);
       expect(result.order).toBe(existingOrder);
+      expect(result.order.status).toBe(OrderStatus.PENDING_PAYMENT);
+      expect(result.order.sellerOrders[0].shop).toEqual({
+        id: 'shop-1',
+        name: 'Alpha Shop',
+        slug: 'alpha-shop',
+      });
+
+      // Verify Prisma query requested the shop relation
+      expect(mockPrisma.order.findUnique).toHaveBeenCalledWith({
+        where: { id: 'existing-order-id' },
+        include: {
+          sellerOrders: {
+            include: {
+              shop: {
+                select: { id: true, name: true, slug: true },
+              },
+              items: true,
+            },
+          },
+        },
+      });
+
+      // Verify no order creation or checkout attempt update occurred
       expect(mockPrisma.order.create).not.toHaveBeenCalled();
+      expect(mockPrisma.sellerOrder.create).not.toHaveBeenCalled();
+      expect(mockPrisma.orderStatusHistory.create).not.toHaveBeenCalled();
+      expect(mockPrisma.checkoutAttempt.update).not.toHaveBeenCalled();
+      expect(mockPrisma.cartItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockPrisma.inventoryMovement.create).not.toHaveBeenCalled();
     });
 
     it('should reject if checkout attempt is in status other than STOCK_RESERVED', async () => {
@@ -559,6 +612,138 @@ describe('CheckoutService (Unit Tests)', () => {
           variantId: { in: ['var-1', 'var-2'] },
         },
       });
+    });
+  });
+
+  describe('getCheckoutAttempt - Read-Only Recovery', () => {
+    it('0. should verify that getCheckoutAttempt endpoint is restricted exclusively to CUSTOMER role metadata', () => {
+      const roles = Reflect.getMetadata(ROLES_KEY, CheckoutController.prototype.getCheckoutAttempt);
+      expect(roles).toEqual([UserRole.CUSTOMER]);
+    });
+    it('1. should throw NotFoundException with identical message if checkout attempt does not exist', async () => {
+      mockPrisma.checkoutAttempt.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.getCheckoutAttempt('user-1', 'non-existent-attempt'),
+      ).rejects.toThrow(new NotFoundException('Checkout attempt not found'));
+    });
+
+    it('2. should throw identical NotFoundException without revealing existence if another customer owns the attempt', async () => {
+      mockPrisma.checkoutAttempt.findUnique.mockResolvedValueOnce({
+        id: 'attempt-1',
+        userId: 'other-user',
+        status: CheckoutStatus.STOCK_RESERVED,
+        expiresAt: new Date(Date.now() + 60000),
+      });
+
+      await expect(
+        service.getCheckoutAttempt('user-1', 'attempt-1'),
+      ).rejects.toThrow(new NotFoundException('Checkout attempt not found'));
+    });
+
+    it('3. should return completed attempt with existing order and shop details for owner without mutation', async () => {
+      const futureDate = new Date(Date.now() + 60000);
+      mockPrisma.checkoutAttempt.findUnique.mockResolvedValueOnce({
+        id: 'attempt-completed',
+        userId: 'user-1',
+        status: CheckoutStatus.COMPLETED,
+        orderId: 'ord-123',
+        expiresAt: futureDate,
+      });
+
+      const existingOrder = {
+        id: 'ord-123',
+        orderNumber: 'ORD-20261015-0001',
+        customerId: 'user-1',
+        status: OrderStatus.PENDING_PAYMENT,
+        sellerOrders: [
+          {
+            id: 'so-1',
+            status: SellerOrderStatus.PENDING_PAYMENT,
+            shop: { id: 'shop-1', name: 'Alpha Store', slug: 'alpha-store' },
+            items: [{ id: 'item-1', variantId: 'var-1', quantity: 2 }],
+          },
+        ],
+      };
+
+      mockPrisma.order.findUnique.mockResolvedValueOnce(existingOrder);
+
+      const result = await service.getCheckoutAttempt('user-1', 'attempt-completed');
+
+      expect(result.id).toBe('attempt-completed');
+      expect(result.status).toBe(CheckoutStatus.COMPLETED);
+      expect(result.isExisting).toBe(true);
+      expect(result.isExpired).toBe(false);
+      expect(result.order).toBe(existingOrder);
+      expect(result.order?.sellerOrders[0].shop).toEqual({
+        id: 'shop-1',
+        name: 'Alpha Store',
+        slug: 'alpha-store',
+      });
+      expect(result.order?.status).toBe(OrderStatus.PENDING_PAYMENT);
+      expect(result.order?.sellerOrders[0].status).toBe(SellerOrderStatus.PENDING_PAYMENT);
+
+      // Verify no mutation occurred
+      expect(mockPrisma.order.create).not.toHaveBeenCalled();
+      expect(mockPrisma.sellerOrder.create).not.toHaveBeenCalled();
+      expect(mockPrisma.checkoutAttempt.update).not.toHaveBeenCalled();
+      expect(mockPrisma.cartItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('4. should not expose order if associated order belongs to a different customer', async () => {
+      mockPrisma.checkoutAttempt.findUnique.mockResolvedValueOnce({
+        id: 'attempt-completed',
+        userId: 'user-1',
+        status: CheckoutStatus.COMPLETED,
+        orderId: 'ord-mismatched',
+        expiresAt: new Date(Date.now() + 60000),
+      });
+
+      mockPrisma.order.findUnique.mockResolvedValueOnce({
+        id: 'ord-mismatched',
+        customerId: 'different-user-compromised',
+      });
+
+      const result = await service.getCheckoutAttempt('user-1', 'attempt-completed');
+      expect(result.order).toBeNull();
+      expect(result.isExisting).toBe(false);
+    });
+
+    it('5. should return status STOCK_RESERVED for valid unexpired attempt without order', async () => {
+      const futureDate = new Date(Date.now() + 300000);
+      mockPrisma.checkoutAttempt.findUnique.mockResolvedValueOnce({
+        id: 'attempt-active',
+        userId: 'user-1',
+        status: CheckoutStatus.STOCK_RESERVED,
+        orderId: null,
+        expiresAt: futureDate,
+      });
+
+      const result = await service.getCheckoutAttempt('user-1', 'attempt-active');
+
+      expect(result.id).toBe('attempt-active');
+      expect(result.status).toBe(CheckoutStatus.STOCK_RESERVED);
+      expect(result.isExpired).toBe(false);
+      expect(result.isExisting).toBe(false);
+      expect(result.order).toBeNull();
+    });
+
+    it('6. should detect expired reservation and return isExpired: true', async () => {
+      const pastDate = new Date(Date.now() - 30000);
+      mockPrisma.checkoutAttempt.findUnique.mockResolvedValueOnce({
+        id: 'attempt-expired',
+        userId: 'user-1',
+        status: CheckoutStatus.STOCK_RESERVED,
+        orderId: null,
+        expiresAt: pastDate,
+      });
+
+      const result = await service.getCheckoutAttempt('user-1', 'attempt-expired');
+
+      expect(result.id).toBe('attempt-expired');
+      expect(result.status).toBe(CheckoutStatus.EXPIRED);
+      expect(result.isExpired).toBe(true);
+      expect(result.order).toBeNull();
     });
   });
 });

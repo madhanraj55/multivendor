@@ -51,11 +51,11 @@ export function AccountProfilePage() {
 
   const initials = fullName
     ? fullName
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
     : 'U';
 
   return (
@@ -85,7 +85,7 @@ export function AccountProfilePage() {
               onClick={() => navigate('/profile')}
             >
               <span className="bb-account-nav-icon">👤</span>
-              Personal Profile
+              Profile
             </button>
             <button
               type="button"
@@ -95,6 +95,39 @@ export function AccountProfilePage() {
               <span className="bb-account-nav-icon">📍</span>
               Manage Addresses
             </button>
+            {authUser?.role === 'ADMIN' && (
+              <button
+                type="button"
+                className="bb-account-nav-item"
+                style={{ backgroundColor: '#fff7ed', color: '#c2410c', fontWeight: 'bold' }}
+                onClick={() => navigate('/admin/orders')}
+              >
+                <span className="bb-account-nav-icon">🛡️</span>
+                Admin Orders Dashboard
+              </button>
+            )}
+            {authUser?.role === 'SELLER' && (
+              <>
+                <button
+                  type="button"
+                  className="bb-account-nav-item"
+                  style={{ backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 'bold' }}
+                  onClick={() => navigate('/seller/products')}
+                >
+                  <span className="bb-account-nav-icon">📦</span>
+                  Vendor Product Catalogue
+                </button>
+                <button
+                  type="button"
+                  className="bb-account-nav-item"
+                  style={{ backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 'bold' }}
+                  onClick={() => navigate('/seller/orders')}
+                >
+                  <span className="bb-account-nav-icon">🏬</span>
+                  Vendor Orders Dashboard
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="bb-account-nav-item"
@@ -136,9 +169,8 @@ export function AccountProfilePage() {
           <div className="bb-panel-header">
             <h2 className="bb-panel-title">Personal Profile Details</h2>
             <span
-              className={`bb-badge ${
-                authMode === 'AUTHENTICATED' ? 'bb-badge-success' : 'bb-badge-primary'
-              }`}
+              className={`bb-badge ${authMode === 'AUTHENTICATED' ? 'bb-badge-success' : 'bb-badge-primary'
+                }`}
             >
               {authMode === 'AUTHENTICATED'
                 ? `Live Account (${authUser?.role || 'CUSTOMER'})`

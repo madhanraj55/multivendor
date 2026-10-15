@@ -1,0 +1,530 @@
+/* ==========================================================================
+   BharatBazaar - Admin Orders Dashboard Styles
+   ========================================================================== */
+
+.bb-admin-orders-container {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+/* Page Header */
+.bb-admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  background: linear-gradient(135deg, var(--color-slate-900) 0%, var(--color-slate-800) 100%);
+  color: var(--color-white);
+  padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.bb-admin-header-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bb-admin-header-badge-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.bb-admin-header-title {
+  color: var(--color-white);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.bb-admin-header-desc {
+  color: var(--color-slate-300);
+  font-size: var(--text-sm);
+  max-width: 650px;
+  margin: 0;
+}
+
+.bb-admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Status Filter Tabs */
+.bb-admin-tabs {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 2px solid var(--color-slate-200);
+  margin-bottom: var(--space-6);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.bb-admin-tab {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-slate-600);
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  background: none;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.bb-admin-tab:hover {
+  color: var(--brand-primary);
+  background-color: var(--color-slate-100);
+}
+
+.bb-admin-tab.active {
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-bold);
+  border-bottom-color: var(--brand-primary);
+  background-color: var(--color-slate-100);
+}
+
+/* Search and Filters Bar */
+.bb-admin-filter-bar {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.bb-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 200px;
+}
+
+.bb-filter-group-sm {
+  flex: 0 1 140px;
+}
+
+.bb-filter-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-slate-700);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bb-filter-input,
+.bb-filter-select {
+  padding: 0.55rem 0.85rem;
+  font-size: var(--text-sm);
+  border: 1px solid var(--color-slate-300);
+  border-radius: var(--radius-md);
+  background-color: var(--color-white);
+  color: var(--color-slate-800);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.bb-filter-input:focus,
+.bb-filter-select:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+}
+
+.bb-filter-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Orders Table */
+.bb-admin-table-container {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: var(--space-6);
+}
+
+.bb-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: var(--text-sm);
+}
+
+.bb-admin-table th {
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-700);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-slate-200);
+  white-space: nowrap;
+}
+
+.bb-admin-table td {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-slate-100);
+  color: var(--color-slate-800);
+  vertical-align: middle;
+}
+
+.bb-admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.bb-admin-table tr:hover td {
+  background-color: var(--color-slate-50);
+}
+
+.bb-admin-order-link {
+  font-family: monospace;
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.bb-admin-order-link:hover {
+  color: var(--brand-primary-hover);
+}
+
+.bb-customer-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bb-customer-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-slate-900);
+}
+
+.bb-customer-email {
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+}
+
+.bb-customer-phone {
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+}
+
+.bb-shop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bb-shop-chip {
+  display: inline-block;
+  background-color: var(--color-slate-100);
+  color: var(--color-slate-700);
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid var(--color-slate-200);
+}
+
+/* Pending Payment Row Highlight */
+.bb-admin-row-unpaid td {
+  background-color: #fffbeb;
+}
+
+.bb-admin-row-unpaid:hover td {
+  background-color: #fef3c7;
+}
+
+/* Pagination Bar */
+.bb-admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  background-color: var(--color-slate-50);
+  border-top: 1px solid var(--color-slate-200);
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.bb-admin-page-info {
+  font-size: var(--text-sm);
+  color: var(--color-slate-600);
+}
+
+.bb-admin-page-controls {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Detail Modal / Drawer */
+.bb-admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.bb-admin-modal {
+  background-color: var(--color-white);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-2xl);
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.bb-admin-modal-header {
+  padding: var(--space-5) var(--space-6);
+  background-color: var(--color-slate-900);
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-slate-800);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.bb-admin-modal-title {
+  color: var(--color-white);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.bb-admin-modal-close {
+  background: none;
+  border: none;
+  color: var(--color-slate-400);
+  font-size: var(--text-2xl);
+  cursor: pointer;
+  line-height: 1;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast);
+}
+
+.bb-admin-modal-close:hover {
+  color: var(--color-white);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.bb-admin-modal-body {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Detail Sections */
+.bb-admin-section {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-xs);
+}
+
+.bb-admin-section-title {
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-slate-900);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-slate-100);
+  padding-bottom: var(--space-2);
+}
+
+.bb-admin-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .bb-admin-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bb-detail-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bb-detail-k {
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+  text-transform: uppercase;
+  font-weight: var(--font-weight-medium);
+}
+
+.bb-detail-v {
+  font-size: var(--text-sm);
+  color: var(--color-slate-800);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Unpaid Warning Banner */
+.bb-admin-unpaid-banner {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  line-height: var(--line-height-normal);
+}
+
+.bb-admin-unpaid-banner-icon {
+  font-size: var(--text-xl);
+  flex-shrink: 0;
+}
+
+/* Seller Package Card inside Modal */
+.bb-admin-pkg-card {
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.bb-admin-pkg-header {
+  background-color: var(--color-slate-50);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-slate-200);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bb-admin-pkg-body {
+  padding: var(--space-4);
+}
+
+.bb-admin-pkg-financials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  background-color: var(--color-slate-50);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.bb-admin-pkg-financial-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Status History Timeline */
+.bb-admin-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  position: relative;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-slate-200);
+}
+
+.bb-admin-timeline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bb-admin-timeline-bullet {
+  position: absolute;
+  left: calc(-1 * var(--space-4) - 5px);
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--brand-primary);
+}
+
+.bb-admin-timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+}
+
+.bb-admin-timeline-notes {
+  font-size: var(--text-xs);
+  color: var(--color-slate-700);
+  background-color: var(--color-slate-50);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-top: 2px;
+}
+
+/* Status Transition Action Box */
+.bb-admin-action-box {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid var(--color-slate-300);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bb-admin-action-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bb-admin-action-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}

@@ -35,6 +35,10 @@ import {
   checkoutApi,
   mapBackendOrderToUi,
 } from '../services/checkoutApi.ts';
+import {
+  ordersApi,
+  mapCustomerOrderSummaryToUi,
+} from '../services/ordersApi.ts';
 
 
 interface MarketplaceContextValue {
@@ -84,7 +88,11 @@ interface MarketplaceContextValue {
   setSelectedAddressId: (id: string) => void;
 
   orders: Order[];
+  ordersLoading: boolean;
+  ordersError: string | null;
+  fetchOrders: () => Promise<void>;
   placeOrder: (notes?: string, checkoutAttemptId?: string) => Promise<Order> | Order;
+  recordOrder: (order: Order) => void;
 
   pincode: string;
   setPincode: (pin: string) => void;
@@ -196,6 +204,15 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return DEMO_USER;
   });
 
+  const [orders, setOrders] = useState<Order[]>(() => {
+    return sessionManager.getSession() ? [] : DEMO_ORDERS;
+  });
+  const [ordersLoading, setOrdersLoading] = useState<boolean>(() => {
+    return Boolean(sessionManager.getSession());
+  });
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const ordersRequestIdRef = useRef<number>(0);
+
   useEffect(() => {
     const unsubscribe = sessionManager.subscribe((session) => {
       if (session) {
@@ -217,6 +234,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             setAddresses([]);
             setSelectedAddressId('');
             setAddressesLoading(true);
+            setOrders([]);
+            setOrdersError(null);
+            setOrdersLoading(true);
+            ordersRequestIdRef.current++;
           }
           return session.user;
         });
@@ -245,6 +266,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
             setCartError(null);
             setAddresses([]);
             setSelectedAddressId('');
+            setOrders([]);
+            setOrdersError(null);
+            setOrdersLoading(false);
+            ordersRequestIdRef.current++;
             return 'ANONYMOUS';
           }
           return prev;
@@ -272,6 +297,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setAddresses([]);
       setSelectedAddressId('');
       setAddressesLoading(true);
+      setOrders([]);
+      setOrdersError(null);
+      setOrdersLoading(true);
+      ordersRequestIdRef.current++;
     }
     sessionManager.setSession(session);
     setAuthMode('AUTHENTICATED');
@@ -296,6 +325,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId(DEMO_ADDRESSES[0]?.id || '');
     setAddressesLoading(false);
     setAddressesError(null);
+    setOrders(DEMO_ORDERS);
+    setOrdersLoading(false);
+    setOrdersError(null);
+    ordersRequestIdRef.current++;
     setAuthWishlistIds([]);
     setAuthWishlistProducts([]);
     authWishlistIdsRef.current = [];
@@ -318,6 +351,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId('');
     setAddressesLoading(false);
     setAddressesError(null);
+    setOrders([]);
+    setOrdersLoading(false);
+    setOrdersError(null);
+    ordersRequestIdRef.current++;
     setAuthWishlistIds([]);
     setAuthWishlistProducts([]);
     authWishlistIdsRef.current = [];
@@ -348,6 +385,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId('');
     setAddressesLoading(false);
     setAddressesError(null);
+    setOrders([]);
+    setOrdersLoading(false);
+    setOrdersError(null);
+    ordersRequestIdRef.current++;
     setAuthWishlistIds([]);
     setAuthWishlistProducts([]);
     authWishlistIdsRef.current = [];
@@ -362,8 +403,6 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     cartRequestIdRef.current++;
   };
 
-
-  const [orders, setOrders] = useState<Order[]>(DEMO_ORDERS);
   const [pincode, setPincode] = useState<string>('560038');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -443,6 +482,69 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     } finally {
       if (currentReqId === cartRequestIdRef.current) {
         setCartLoading(false);
+      }
+    }
+  }, [authMode]);
+
+  const fetchOrders = useCallback(async () => {
+    if (authMode !== 'AUTHENTICATED') {
+      if (authMode === 'DEMO') {
+        setOrders(DEMO_ORDERS);
+      } else {
+        setOrders([]);
+      }
+      setOrdersLoading(false);
+      setOrdersError(null);
+      return;
+    }
+
+    const currentReqId = ++ordersRequestIdRef.current;
+    setOrdersLoading(true);
+    setOrdersError(null);
+
+    try {
+      const res = await ordersApi.getMyOrders({ page: 1, limit: 20 });
+      if (currentReqId !== ordersRequestIdRef.current) return;
+
+      const summaries = (res.data || []).map(mapCustomerOrderSummaryToUi);
+
+      setOrders((prevOrders) => {
+        const existingMap = new Map<string, Order>();
+        prevOrders.forEach((o) => {
+          if (o.id) existingMap.set(o.id, o);
+          if (o.orderNumber) existingMap.set(o.orderNumber, o);
+        });
+
+        const mergedSummaries = summaries.map((summaryOrder) => {
+          const existing = existingMap.get(summaryOrder.orderNumber) || existingMap.get(summaryOrder.id);
+          if (existing && existing.packages.some((pkg) => pkg.items.length > 0)) {
+            return {
+              ...existing,
+              status: summaryOrder.status,
+              totalAmount: summaryOrder.totalAmount,
+            };
+          }
+          return summaryOrder;
+        });
+
+        const summaryNumbers = new Set(summaries.map((s) => s.orderNumber));
+        const summaryIds = new Set(summaries.map((s) => s.id));
+        const unlistedLocals = prevOrders.filter(
+          (o) =>
+            !summaryNumbers.has(o.orderNumber) &&
+            !summaryIds.has(o.id) &&
+            o.packages.some((pkg) => pkg.items.length > 0)
+        );
+
+        return [...unlistedLocals, ...mergedSummaries];
+      });
+    } catch (err) {
+      if (currentReqId !== ordersRequestIdRef.current) return;
+      const message = err instanceof Error ? err.message : 'Failed to load orders from server';
+      setOrdersError(message);
+    } finally {
+      if (currentReqId === ordersRequestIdRef.current) {
+        setOrdersLoading(false);
       }
     }
   }, [authMode]);
@@ -751,7 +853,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return nextQueue;
   };
 
-  const clearCart = async (): Promise<void> => {
+  const clearCart = useCallback(async (): Promise<void> => {
     if (authMode !== 'AUTHENTICATED') {
       setDemoCart([]);
       return;
@@ -789,7 +891,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     const nextQueue = cartQueueRef.current.then(op, op);
     cartQueueRef.current = nextQueue.catch(() => {});
     return nextQueue;
-  };
+  }, [authMode]);
 
   const cart = authMode === 'AUTHENTICATED' ? authCart : demoCart;
   const cartTotalCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -1091,7 +1193,33 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setSelectedAddressId(id);
   };
 
-  const placeOrder = async (notes?: string, checkoutAttemptId?: string): Promise<Order> => {
+  const recordOrder = useCallback((order: Order) => {
+    setOrders((prev) => {
+      const idx = prev.findIndex((o) => o.id === order.id || o.orderNumber === order.orderNumber);
+      if (idx >= 0) {
+        const existing = prev[idx];
+        const incomingHasItems = order.packages.some((p) => p.items.length > 0);
+        const existingHasItems = existing.packages.some((p) => p.items.length > 0);
+
+        if (incomingHasItems || !existingHasItems) {
+          const next = [...prev];
+          next[idx] = order;
+          return next;
+        }
+
+        const next = [...prev];
+        next[idx] = {
+          ...existing,
+          status: order.status,
+          totalAmount: order.totalAmount,
+        };
+        return next;
+      }
+      return [order, ...prev];
+    });
+  }, []);
+
+  const placeOrder = useCallback(async (notes?: string, checkoutAttemptId?: string): Promise<Order> => {
     const chosenAddress = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
 
     if (authMode === 'AUTHENTICATED' && checkoutAttemptId) {
@@ -1100,7 +1228,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         notes,
       });
       const uiOrder = mapBackendOrderToUi(res.order);
-      setOrders((prev) => [uiOrder, ...prev]);
+      recordOrder(uiOrder);
       // Authoritative clear
       try {
         await clearCart();
@@ -1154,7 +1282,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setOrders((prev) => [newOrder, ...prev]);
     clearCart();
     return newOrder;
-  };
+  }, [addresses, selectedAddressId, authMode, recordOrder, clearCart, cart, cartSubtotal]);
 
   return (
     <MarketplaceContext.Provider
@@ -1199,7 +1327,11 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         selectedAddressId,
         setSelectedAddressId,
         orders,
+        ordersLoading,
+        ordersError,
+        fetchOrders,
         placeOrder,
+        recordOrder,
         pincode,
         setPincode,
         searchQuery,

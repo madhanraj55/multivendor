@@ -638,6 +638,9 @@ export class CheckoutService {
             include: {
               sellerOrders: {
                 include: {
+                  shop: {
+                    select: { id: true, name: true, slug: true },
+                  },
                   items: true,
                 },
               },
@@ -888,5 +891,65 @@ export class CheckoutService {
       },
     );
   }
-}
 
+  /**
+   * Safe read-only recovery of a checkout attempt for an authenticated customer.
+   * Performs strict ownership verification against the authenticated JWT userId.
+   * Never mutates orders, inventory, or cart state.
+   */
+  async getCheckoutAttempt(userId: string, attemptId: string) {
+    const attempt = await this.prisma.checkoutAttempt.findUnique({
+      where: { id: attemptId },
+    });
+
+    if (!attempt || attempt.userId !== userId) {
+      throw new NotFoundException('Checkout attempt not found');
+    }
+
+    const now = new Date();
+    const isExpired =
+      attempt.status === CheckoutStatus.EXPIRED ||
+      (attempt.status === CheckoutStatus.STOCK_RESERVED &&
+        new Date(attempt.expiresAt) <= now);
+
+    // If completed and has associated order, verify order customer and return order with shops
+    if (attempt.status === CheckoutStatus.COMPLETED && attempt.orderId) {
+      const existingOrder = await this.prisma.order.findUnique({
+        where: { id: attempt.orderId },
+        include: {
+          sellerOrders: {
+            include: {
+              shop: {
+                select: { id: true, name: true, slug: true },
+              },
+              items: true,
+            },
+          },
+          statusHistory: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+
+      if (existingOrder && existingOrder.customerId === userId) {
+        return {
+          id: attempt.id,
+          status: attempt.status,
+          isExpired: false,
+          isExisting: true,
+          expiresAt: attempt.expiresAt,
+          order: existingOrder,
+        };
+      }
+    }
+
+    return {
+      id: attempt.id,
+      status: isExpired ? CheckoutStatus.EXPIRED : attempt.status,
+      isExpired,
+      isExisting: false,
+      expiresAt: attempt.expiresAt,
+      order: null,
+    };
+  }
+}

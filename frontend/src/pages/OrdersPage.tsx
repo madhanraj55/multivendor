@@ -1,29 +1,127 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import type { Order } from '../types/index.ts';
-import { EmptyState } from '../components/common/StateViews.tsx';
+import { EmptyState, ErrorState, LoadingSpinner } from '../components/common/StateViews.tsx';
+import { ordersApi, mapCustomerOrderDetailToUi } from '../services/ordersApi.ts';
 import './OrdersPage.css';
 
 export function OrdersPage() {
-  const { orders } = useMarketplace();
+  const {
+    orders,
+    ordersLoading,
+    ordersError,
+    fetchOrders,
+    authMode,
+    recordOrder,
+  } = useMarketplace();
   const { navigate, queryParams } = useRouter();
 
   const selectedOrderId = queryParams.orderId;
   const [activeTab, setActiveTab] = useState<'ALL' | 'PLACED' | 'SHIPPED' | 'DELIVERED'>('ALL');
+  const [detailError, setDetailError] = useState<string | null>(null);
 
-  const selectedOrder = orders.find((o) => o.id === selectedOrderId || o.orderNumber === selectedOrderId);
+  // Fetch orders list on mount if authenticated
+  useEffect(() => {
+    if (authMode === 'AUTHENTICATED') {
+      fetchOrders();
+    }
+  }, [authMode, fetchOrders]);
 
-  const filteredOrders = orders.filter((o) => {
-    if (activeTab === 'ALL') return true;
-    if (activeTab === 'PLACED') return o.status === 'PLACED' || o.status === 'CONFIRMED';
-    if (activeTab === 'SHIPPED') return o.status === 'SHIPPED' || o.status === 'OUT_FOR_DELIVERY';
-    if (activeTab === 'DELIVERED') return o.status === 'DELIVERED';
-    return true;
-  });
+  // Find order in current context memory if present
+  const existingOrder = orders.find(
+    (o) => o.id === selectedOrderId || o.orderNumber === selectedOrderId
+  );
+  const hasDetailedItems = Boolean(
+    existingOrder && existingOrder.packages.some((p) => p.items.length > 0)
+  );
+
+  // Check if selectedOrderId matches UUID format (8-4-4-4-12 hex)
+  const isUuid = Boolean(
+    selectedOrderId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedOrderId)
+  );
+
+  // Detail fetching effect
+  useEffect(() => {
+    if (!selectedOrderId || authMode !== 'AUTHENTICATED') {
+      return;
+    }
+
+    // Already have full items loaded; no additional network call needed
+    if (hasDetailedItems) {
+      return;
+    }
+
+    // If selectedOrderId is a UUID, wait for list loading to finish before attempting lookup
+    if (isUuid && ordersLoading) {
+      return;
+    }
+
+    let resolvedOrderNumber: string | null = null;
+    if (existingOrder?.orderNumber) {
+      resolvedOrderNumber = existingOrder.orderNumber;
+    } else if (!isUuid) {
+      // If not a UUID, treat it directly as an orderNumber
+      resolvedOrderNumber = selectedOrderId;
+    }
+
+    if (!resolvedOrderNumber) {
+      return;
+    }
+
+    let isSubscribed = true;
+    ordersApi
+      .getMyOrderByNumber(resolvedOrderNumber)
+      .then((detail) => {
+        if (!isSubscribed) return;
+        const uiOrder = mapCustomerOrderDetailToUi(detail);
+        recordOrder(uiOrder);
+      })
+      .catch((err) => {
+        if (!isSubscribed) return;
+        setDetailError(
+          err instanceof Error ? err.message : 'Failed to load order details from server'
+        );
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [
+    selectedOrderId,
+    authMode,
+    hasDetailedItems,
+    isUuid,
+    ordersLoading,
+    existingOrder?.orderNumber,
+    recordOrder,
+  ]);
+
+  const handleRetryDetail = () => {
+    setDetailError(null);
+    const orderNum = existingOrder?.orderNumber || (!isUuid ? selectedOrderId : null);
+    if (orderNum) {
+      ordersApi
+        .getMyOrderByNumber(orderNum)
+        .then((detail) => {
+          const uiOrder = mapCustomerOrderDetailToUi(detail);
+          recordOrder(uiOrder);
+        })
+        .catch((err) => {
+          setDetailError(
+            err instanceof Error ? err.message : 'Failed to load order details from server'
+          );
+        });
+    } else {
+      fetchOrders();
+    }
+  };
 
   const getStatusBadge = (status: Order['status']) => {
     switch (status) {
+      case 'PENDING_PAYMENT':
+        return <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>;
       case 'DELIVERED':
         return <span className="bb-badge bb-badge-success">Delivered ✓</span>;
       case 'SHIPPED':
@@ -40,9 +138,80 @@ export function OrdersPage() {
     }
   };
 
-  // If a specific order is selected for detail view:
-  if (selectedOrder) {
+  // If a specific order is requested:
+  if (selectedOrderId) {
+    const isWaitingForListLookup = isUuid && ordersLoading && !existingOrder;
+    const isWaitingForDetail =
+      isWaitingForListLookup ||
+      (authMode === 'AUTHENTICATED' &&
+        !hasDetailedItems &&
+        !detailError &&
+        (Boolean(existingOrder) || !isUuid));
+
+    if (isWaitingForDetail) {
+      return (
+        <div className="bb-container bb-orders-container">
+          <div className="bb-orders-header">
+            <button
+              type="button"
+              className="bb-btn bb-btn-ghost bb-btn-sm"
+              onClick={() => navigate('/orders')}
+            >
+              ← Back to All Orders
+            </button>
+          </div>
+          <LoadingSpinner />
+        </div>
+      );
+    }
+
+    if (detailError) {
+      return (
+        <div className="bb-container bb-orders-container">
+          <div className="bb-orders-header">
+            <button
+              type="button"
+              className="bb-btn bb-btn-ghost bb-btn-sm"
+              onClick={() => navigate('/orders')}
+            >
+              ← Back to All Orders
+            </button>
+          </div>
+          <ErrorState
+            title="Failed to Load Order Details"
+            description={detailError}
+            onRetry={handleRetryDetail}
+          />
+        </div>
+      );
+    }
+
+    const selectedOrder = existingOrder;
+    if (!selectedOrder) {
+      return (
+        <div className="bb-container bb-orders-container">
+          <div className="bb-orders-header">
+            <button
+              type="button"
+              className="bb-btn bb-btn-ghost bb-btn-sm"
+              onClick={() => navigate('/orders')}
+            >
+              ← Back to All Orders
+            </button>
+          </div>
+          <EmptyState
+            icon="🔍"
+            title="Order Not Found"
+            description="We could not find the requested order. It may belong to another account or the order number is invalid."
+            actionText="View All Orders"
+            onAction={() => navigate('/orders')}
+          />
+        </div>
+      );
+    }
+
     const isStepActive = (stepIndex: number) => {
+      if (selectedOrder.status === 'PENDING_PAYMENT') return false;
       const statuses = ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED'];
       const currentIndex = statuses.indexOf(selectedOrder.status);
       return currentIndex >= stepIndex;
@@ -89,6 +258,14 @@ export function OrdersPage() {
               <span className="bb-order-meta-label">Payment Method</span>
               <span className="bb-order-meta-val">{selectedOrder.paymentMethod}</span>
             </div>
+            <div className="bb-order-meta-item">
+              <span className="bb-order-meta-label">Payment Status</span>
+              <span className="bb-order-meta-val">
+                {selectedOrder.status === 'PENDING_PAYMENT' || selectedOrder.paymentStatus === 'PENDING'
+                  ? 'Awaiting Payment ⏳'
+                  : 'Paid ✓'}
+              </span>
+            </div>
           </div>
 
           {/* Stepper */}
@@ -127,9 +304,13 @@ export function OrdersPage() {
                     <span>🏬 Seller: {pkg.sellerName}</span>
                   </div>
                   <div>
-                    <span className="bb-badge bb-badge-neutral">
-                      Waybill: {pkg.trackingNumber}
-                    </span>
+                    {pkg.packageStatus === 'PENDING_PAYMENT' ? (
+                      <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>
+                    ) : (
+                      <span className="bb-badge bb-badge-neutral">
+                        Waybill: {pkg.trackingNumber}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -176,9 +357,11 @@ export function OrdersPage() {
                 {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} -{' '}
                 <strong>{selectedOrder.shippingAddress.pincode}</strong>
               </p>
-              <div className="bb-address-phone">
-                Phone: {selectedOrder.shippingAddress.phone}
-              </div>
+              {selectedOrder.shippingAddress.phone && (
+                <div className="bb-address-phone">
+                  Phone: {selectedOrder.shippingAddress.phone}
+                </div>
+              )}
             </div>
 
             <div className="bb-card bb-order-side-card">
@@ -221,7 +404,51 @@ export function OrdersPage() {
     );
   }
 
-  // List View of Orders
+  // List View of Orders:
+  if (ordersLoading && orders.length === 0) {
+    return (
+      <div className="bb-container bb-orders-container">
+        <div className="bb-orders-header">
+          <div>
+            <h1 className="bb-plp-title">My Orders</h1>
+            <p className="bb-section-subtitle">
+              Track customer deliveries, package details, and invoices from multi-vendor merchants
+            </p>
+          </div>
+        </div>
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (ordersError && orders.length === 0) {
+    return (
+      <div className="bb-container bb-orders-container">
+        <div className="bb-orders-header">
+          <div>
+            <h1 className="bb-plp-title">My Orders</h1>
+            <p className="bb-section-subtitle">
+              Track customer deliveries, package details, and invoices from multi-vendor merchants
+            </p>
+          </div>
+        </div>
+        <ErrorState
+          title="Unable to Load Orders"
+          description={ordersError}
+          onRetry={fetchOrders}
+        />
+      </div>
+    );
+  }
+
+  const filteredOrders = orders.filter((o) => {
+    if (activeTab === 'ALL') return true;
+    if (activeTab === 'PLACED') return o.status === 'PLACED' || o.status === 'CONFIRMED' || o.status === 'PENDING_PAYMENT';
+    if (activeTab === 'SHIPPED') return o.status === 'SHIPPED' || o.status === 'OUT_FOR_DELIVERY';
+    if (activeTab === 'DELIVERED') return o.status === 'DELIVERED';
+    return true;
+  });
+
   return (
     <div className="bb-container bb-orders-container">
       <div className="bb-orders-header">
@@ -239,6 +466,27 @@ export function OrdersPage() {
           Continue Shopping
         </button>
       </div>
+
+      {ordersError && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 'var(--space-4)',
+            padding: '0.75rem 1rem',
+            background: '#fffbeb',
+            border: '1px solid #fef3c7',
+            borderRadius: '8px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span style={{ color: '#92400e', fontSize: '0.875rem' }}>⚠️ {ordersError}</span>
+          <button type="button" className="bb-btn bb-btn-ghost bb-btn-sm" onClick={fetchOrders}>
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="bb-orders-tabs">
@@ -268,10 +516,14 @@ export function OrdersPage() {
       {filteredOrders.length === 0 ? (
         <EmptyState
           icon="📦"
-          title="No Orders Found"
-          description="You don't have any orders matching this filter."
-          actionText="Explore Marketplace"
-          onAction={() => navigate('/products')}
+          title={authMode === 'ANONYMOUS' ? 'Sign in to View Orders' : 'No Orders Found'}
+          description={
+            authMode === 'ANONYMOUS'
+              ? 'Please sign in to view your order history and tracking updates.'
+              : "You don't have any orders matching this filter."
+          }
+          actionText={authMode === 'ANONYMOUS' ? 'Sign In' : 'Explore Marketplace'}
+          onAction={() => navigate(authMode === 'ANONYMOUS' ? '/login' : '/products')}
         />
       ) : (
         <div>
@@ -311,44 +563,66 @@ export function OrdersPage() {
                         <div className="bb-order-package-seller">
                           <span>🏬 Dispatched by: {pkg.sellerName}</span>
                         </div>
-                        <span className="bb-badge bb-badge-neutral">
-                          Tracking: {pkg.trackingNumber}
-                        </span>
+                        {pkg.packageStatus === 'PENDING_PAYMENT' ? (
+                          <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>
+                        ) : (
+                          <span className="bb-badge bb-badge-neutral">
+                            Tracking: {pkg.trackingNumber}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="bb-order-items-grid">
-                        {pkg.items.map((item, iIdx) => (
-                          <div key={iIdx} className="bb-order-item-row">
-                            <img
-                              src={item.product.thumbnail}
-                              alt={item.product.title}
-                              className="bb-order-item-img"
-                            />
-                            <div className="bb-order-item-info">
-                              <h4 className="bb-order-item-title">{item.product.title}</h4>
-                              <div className="bb-order-item-variant">
-                                Qty: {item.quantity} | ₹{item.unitPrice.toLocaleString('en-IN')} each
+                      {pkg.items.length > 0 ? (
+                        <div className="bb-order-items-grid">
+                          {pkg.items.map((item, iIdx) => (
+                            <div key={iIdx} className="bb-order-item-row">
+                              <img
+                                src={item.product.thumbnail}
+                                alt={item.product.title}
+                                className="bb-order-item-img"
+                              />
+                              <div className="bb-order-item-info">
+                                <h4 className="bb-order-item-title">{item.product.title}</h4>
+                                <div className="bb-order-item-variant">
+                                  Qty: {item.quantity} | ₹{item.unitPrice.toLocaleString('en-IN')} each
+                                </div>
+                              </div>
+                              <div className="bb-order-item-price">
+                                ₹{(item.unitPrice * item.quantity).toLocaleString('en-IN')}
                               </div>
                             </div>
-                            <div className="bb-order-item-price">
-                              ₹{(item.unitPrice * item.quantity).toLocaleString('en-IN')}
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bb-order-items-grid">
+                          <div className="bb-order-item-row" style={{ padding: '0.25rem 0', opacity: 0.85 }}>
+                            <div className="bb-order-item-info">
+                              <div className="bb-order-item-variant">
+                                Package confirmed with merchant • Click details to view items
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
 
                 <div className="bb-order-card-footer">
                   <div className="bb-order-ship-note">
-                    Ship to: <strong>{order.shippingAddress.name}</strong> ({order.shippingAddress.city} - {order.shippingAddress.pincode})
+                    {order.shippingAddress.city ? (
+                      <>
+                        Ship to: <strong>{order.shippingAddress.name}</strong> ({order.shippingAddress.city} - {order.shippingAddress.pincode})
+                      </>
+                    ) : (
+                      <>Delivery to registered customer address</>
+                    )}
                   </div>
                   <div className="bb-order-actions-wrap">
                     <button
                       type="button"
                       className="bb-btn bb-btn-primary bb-btn-sm"
-                      onClick={() => navigate(`/orders?orderId=${order.id}`)}
+                      onClick={() => navigate(`/orders?orderId=${order.orderNumber || order.id}`)}
                     >
                       View Order Details →
                     </button>

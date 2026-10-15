@@ -1,5 +1,5 @@
 import { RouterProvider, useRouter } from './context/RouterContext.tsx';
-import { MarketplaceProvider } from './context/MarketplaceContext.tsx';
+import { MarketplaceProvider, useMarketplace } from './context/MarketplaceContext.tsx';
 import { Header } from './components/common/Header.tsx';
 import { Footer } from './components/common/Footer.tsx';
 import { EmptyState } from './components/common/StateViews.tsx';
@@ -17,11 +17,15 @@ import { AddressManagementPage } from './pages/AddressManagementPage.tsx';
 import { OrdersPage } from './pages/OrdersPage.tsx';
 import { CheckoutPage } from './pages/CheckoutPage.tsx';
 import { StateShowcasePage } from './pages/StateShowcasePage.tsx';
+import { AdminOrdersPage } from './pages/AdminOrdersPage.tsx';
+import { SellerOrdersPage } from './pages/SellerOrdersPage.tsx';
+import { SellerProductsPage } from './pages/SellerProductsPage.tsx';
 
 import './App.css';
 
 function MainRouterView() {
   const { path, navigate } = useRouter();
+  const { authUser, authMode } = useMarketplace();
 
   // Route resolver
   const renderCurrentPage = () => {
@@ -76,6 +80,102 @@ function MainRouterView() {
 
     if (path === '/states-demo') {
       return <StateShowcasePage />;
+    }
+
+    if (path === '/admin/orders') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Administrator Authentication Required"
+              description="Please sign in with your administrator account to access the marketplace order control dashboard."
+              actionText="Sign In to Admin Portal"
+              onAction={() => navigate('/login')}
+            />
+          </div>
+        );
+      }
+
+      if (authUser.role !== 'ADMIN') {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🚫"
+              title="Administrator Privileges Required (403)"
+              description={`Access Denied. Your account is registered as ${authUser.role}. This management portal is strictly restricted to platform administrators.`}
+              actionText="Return to Marketplace Home"
+              onAction={() => navigate('/')}
+            />
+          </div>
+        );
+      }
+
+      return <AdminOrdersPage />;
+    }
+
+    if (path === '/seller/orders') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Vendor Authentication Required"
+              description="Please sign in with your vendor account to access your shop order fulfillment dashboard."
+              actionText="Sign In to Vendor Portal"
+              onAction={() => navigate('/login')}
+            />
+          </div>
+        );
+      }
+
+      if (authUser.role !== 'SELLER') {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🚫"
+              title="Vendor Access Required (403)"
+              description={`Access Denied. Your account is registered as ${authUser.role}. This portal is exclusively for verified vendor accounts.`}
+              actionText="Return to Marketplace Home"
+              onAction={() => navigate('/')}
+            />
+          </div>
+        );
+      }
+
+      return <SellerOrdersPage />;
+    }
+
+    if (path === '/seller/products') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Vendor Authentication Required"
+              description="Please sign in with your vendor account to access your shop product catalogue."
+              actionText="Sign In to Vendor Portal"
+              onAction={() => navigate('/login')}
+            />
+          </div>
+        );
+      }
+
+      if (authUser.role !== 'SELLER') {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🚫"
+              title="Vendor Access Required (403)"
+              description={`Access Denied. Your account is registered as ${authUser.role}. This portal is exclusively for verified vendor accounts.`}
+              actionText="Return to Marketplace Home"
+              onAction={() => navigate('/')}
+            />
+          </div>
+        );
+      }
+
+      return <SellerProductsPage />;
     }
 
     // 404 Fallback

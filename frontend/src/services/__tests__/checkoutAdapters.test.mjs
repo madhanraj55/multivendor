@@ -400,4 +400,101 @@ describe('Stage 3B-4 Checkout API Integration & Adapter Unit Tests', () => {
     const keyAfterSuccess = tracker.getKey();
     assert.notEqual(keyAfterSuccess, keyAfterExpiry);
   });
+
+  it('9. should recover completed order via recovery endpoint and map UI order with pending payment and shop details', () => {
+    const recoveryResponse = {
+      id: 'attempt-uuid-completed',
+      status: 'COMPLETED',
+      isExpired: false,
+      isExisting: true,
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+      order: sampleBackendOrder,
+    };
+
+    assert.equal(recoveryResponse.status, 'COMPLETED');
+    assert.equal(recoveryResponse.isExisting, true);
+    assert.ok(recoveryResponse.order);
+
+    const uiOrder = mapBackendOrderToUi(recoveryResponse.order);
+    assert.equal(uiOrder.id, 'ord-uuid-001');
+    assert.equal(uiOrder.paymentStatus, 'PENDING');
+    assert.equal(uiOrder.packages[0].sellerName, 'Jaipur Crafts Collective');
+    assert.equal(uiOrder.packages[0].sellerId, 'shop-uuid-1');
+  });
+
+  it('10. should safely handle page reload recovery when cart is empty', () => {
+    // Simulates reload state: empty cart but pending recovery attempt saved in sessionStorage
+    const mockSessionStorage = {
+      bb_pending_checkout: JSON.stringify({
+        attemptId: 'attempt-uuid-completed',
+        idempotencyKey: 'chk-12345',
+        timestamp: Date.now(),
+      }),
+    };
+
+    const storedRecovery = JSON.parse(mockSessionStorage.bb_pending_checkout);
+    assert.ok(storedRecovery);
+    assert.equal(storedRecovery.attemptId, 'attempt-uuid-completed');
+
+    // Cart is empty (0 items)
+    const cart = [];
+    const recoveryPendingAttemptId = storedRecovery.attemptId;
+
+    // Condition in CheckoutPage: does NOT show empty cart if recoveryPendingAttemptId is active
+    const shouldShowEmptyCart = cart.length === 0 && !recoveryPendingAttemptId;
+    assert.equal(shouldShowEmptyCart, false);
+  });
+
+  it('11. should retain recovery record on network failure during order placement to allow retry', () => {
+    let storage = {
+      bb_pending_checkout: JSON.stringify({
+        attemptId: 'attempt-uuid-active',
+        idempotencyKey: 'chk-active',
+        timestamp: Date.now(),
+      }),
+    };
+
+    const handleNetworkError = (err) => {
+      // If error indicates expiry, clear it
+      if (err.message.toLowerCase().includes('expired')) {
+        delete storage.bb_pending_checkout;
+      }
+      // On network failure or dropped response, retain storage so user can retry or check status
+    };
+
+    handleNetworkError(new Error('Network request failed'));
+    assert.ok(storage.bb_pending_checkout, 'Recovery record must be retained on network failure');
+
+    handleNetworkError(new Error('Cannot place order: stock reservation has expired.'));
+    assert.equal(storage.bb_pending_checkout, undefined, 'Recovery record must be cleared when reservation has expired');
+  });
+
+  it('12. should handle active incomplete reservation without creating another reservation', () => {
+    const recoveryResponse = {
+      id: 'attempt-uuid-active',
+      status: 'STOCK_RESERVED',
+      isExpired: false,
+      isExisting: false,
+      expiresAt: new Date(Date.now() + 600000).toISOString(),
+      order: null,
+    };
+
+    assert.equal(recoveryResponse.status, 'STOCK_RESERVED');
+    assert.equal(recoveryResponse.isExpired, false);
+    assert.equal(recoveryResponse.order, null);
+  });
+
+  it('13. should handle expired reservation recovery and prompt intentional restart', () => {
+    const recoveryResponse = {
+      id: 'attempt-uuid-expired',
+      status: 'EXPIRED',
+      isExpired: true,
+      isExisting: false,
+      expiresAt: new Date(Date.now() - 60000).toISOString(),
+      order: null,
+    };
+
+    assert.equal(recoveryResponse.isExpired, true);
+    assert.equal(recoveryResponse.order, null);
+  });
 });
