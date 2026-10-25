@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import { ChangePasswordDto, UpdateProfileDto } from './dto/profile.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
-import { RefreshTokenDto, VerifyEmailDto } from './dto/token.dto.js';
+import { ForgotPasswordDto, RefreshTokenDto, ResetPasswordDto, VerifyEmailDto } from './dto/token.dto.js';
 
 @Injectable()
 export class AuthService {
@@ -102,6 +102,88 @@ export class AuthService {
         this.configService.get<string>('NODE_ENV') !== 'production'
           ? rawToken
           : undefined,
+    };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email.toLowerCase() },
+    });
+
+    if (!user) {
+      return {
+        message:
+          'If an account exists with that email address, a password reset link has been generated.',
+      };
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    return {
+      message:
+        'If an account exists with that email address, a password reset link has been generated.',
+      devResetToken:
+        this.configService.get<string>('NODE_ENV') !== 'production'
+          ? rawToken
+          : undefined,
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const tokenHash = crypto.createHash('sha256').update(dto.token).digest('hex');
+
+    const resetRecord = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!resetRecord) {
+      throw new NotFoundException('Invalid or expired password reset token');
+    }
+
+    if (resetRecord.usedAt) {
+      throw new BadRequestException('Password reset token has already been used');
+    }
+
+    if (new Date() > resetRecord.expiresAt) {
+      throw new BadRequestException('Password reset token has expired');
+    }
+
+    const newPasswordHash = await argon2.hash(dto.newPassword);
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Update user password
+      await tx.user.update({
+        where: { id: resetRecord.userId },
+        data: { passwordHash: newPasswordHash },
+      });
+
+      // 2. Mark reset token as used
+      await tx.passwordResetToken.update({
+        where: { id: resetRecord.id },
+        data: { usedAt: new Date() },
+      });
+
+      // 3. Revoke all active sessions for security
+      await tx.userSession.updateMany({
+        where: { userId: resetRecord.userId, isRevoked: false },
+        data: { isRevoked: true },
+      });
+    });
+
+    return {
+      message:
+        'Password has been reset successfully. You can now log in with your new password.',
     };
   }
 

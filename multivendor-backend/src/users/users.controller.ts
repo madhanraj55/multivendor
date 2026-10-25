@@ -21,17 +21,26 @@ import {
 } from './dto/user-admin.dto.js';
 import { UsersService } from './users.service.js';
 
-@Controller('admin/users')
+@Controller('admin')
 @UseGuards(AuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   /**
+   * GET /api/v1/admin/dashboard/summary
+   * High-level admin dashboard statistics and real-time summaries.
+   */
+  @Get('dashboard/summary')
+  async getAdminDashboardSummary() {
+    return this.usersService.getAdminDashboardSummary();
+  }
+
+  /**
    * GET /api/v1/admin/users
    * Admin-only user listing with pagination and filters.
    */
-  @Get()
+  @Get('users')
   async getAdminUsers(@Query() query: QueryAdminUsersDto) {
     return this.usersService.getAdminUsers(query);
   }
@@ -40,7 +49,7 @@ export class UsersController {
    * GET /api/v1/admin/users/:id
    * Admin-only user details with shop summary and counts.
    */
-  @Get(':id')
+  @Get('users/:id')
   async getAdminUserById(@Param('id') id: string) {
     return this.usersService.getAdminUserById(id);
   }
@@ -49,7 +58,7 @@ export class UsersController {
    * PATCH /api/v1/admin/users/:id/status
    * Update account status and revoke sessions if suspended/deactivated.
    */
-  @Patch(':id/status')
+  @Patch('users/:id/status')
   @HttpCode(HttpStatus.OK)
   async updateUserStatus(
     @CurrentUser('userId') adminUserId: string,
@@ -63,7 +72,7 @@ export class UsersController {
    * PATCH /api/v1/admin/users/:id/role
    * Update user role with self-demotion and last-admin protection.
    */
-  @Patch(':id/role')
+  @Patch('users/:id/role')
   @HttpCode(HttpStatus.OK)
   async updateUserRole(
     @CurrentUser('userId') adminUserId: string,

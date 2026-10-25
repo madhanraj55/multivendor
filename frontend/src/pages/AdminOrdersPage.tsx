@@ -14,6 +14,7 @@ import {
   isOrderUnpaid,
 } from '../services/adminOrdersApi.ts';
 import { EmptyState, ErrorState, LoadingSpinner } from '../components/common/StateViews.tsx';
+import { AdminNav } from '../components/admin/AdminNav.tsx';
 import './AdminOrdersPage.css';
 
 const TABS: Array<{ label: string; status?: OrderStatus }> = [
@@ -238,6 +239,8 @@ export function AdminOrdersPage() {
 
   return (
     <div className="bb-container bb-admin-orders-container">
+      <AdminNav activeModule="orders" />
+
       {/* Header Banner */}
       <div className="bb-admin-header">
         <div className="bb-admin-header-title-area">

@@ -653,6 +653,83 @@
   border-color: #93c5fd;
 }
 
+.bb-btn-edit-product {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-slate-300);
+  color: var(--color-slate-700);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  transition: all var(--transition-fast);
+}
+
+.bb-btn-edit-product:hover {
+  background-color: var(--color-slate-100);
+  color: var(--color-slate-900);
+  border-color: var(--color-slate-400);
+}
+
+/* Variant action buttons */
+.bb-variant-action-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bb-btn-variant-action {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-slate-300);
+  background-color: var(--color-white);
+  color: var(--color-slate-700);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all var(--transition-fast);
+}
+
+.bb-btn-variant-action:hover {
+  background-color: var(--color-slate-50);
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.bb-btn-variant-action-stock {
+  color: #0369a1;
+  border-color: #bae6fd;
+  background-color: #f0f9ff;
+}
+
+.bb-btn-variant-action-stock:hover {
+  background-color: #e0f2fe;
+  color: #0284c7;
+  border-color: #7dd3fc;
+}
+
+/* Pagination container */
+.bb-seller-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding: var(--space-4) 0;
+}
+
+.bb-seller-pagination-info {
+  font-size: var(--text-sm);
+  color: var(--color-slate-600);
+  padding: 0 var(--space-2);
+}
+
 /* Image Upload Modal */
 .bb-modal-backdrop {
   position: fixed;

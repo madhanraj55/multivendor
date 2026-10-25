@@ -9,12 +9,6 @@ import type {
   AuthMode,
   AuthSession,
 } from '../types/index.ts';
-import {
-  DEMO_PRODUCTS,
-  DEMO_ADDRESSES,
-  DEMO_ORDERS,
-  DEMO_USER,
-} from '../data/demoData.ts';
 import { sessionManager, ApiError } from '../services/apiClient.ts';
 import { authApi } from '../services/authApi.ts';
 import {
@@ -104,29 +98,8 @@ interface MarketplaceContextValue {
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null);
 
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
-  // Initialize sample cart items for demo mode
-  const [demoCart, setDemoCart] = useState<CartItem[]>([
-    {
-      id: 'cart-1',
-      productId: DEMO_PRODUCTS[0].id,
-      product: DEMO_PRODUCTS[0],
-      selectedVariants: { Color: 'Midnight Obsidian', Edition: 'Standard Edition' },
-      quantity: 1,
-      price: DEMO_PRODUCTS[0].price,
-      sellerId: DEMO_PRODUCTS[0].sellerId,
-      sellerName: DEMO_PRODUCTS[0].sellerName,
-    },
-    {
-      id: 'cart-2',
-      productId: DEMO_PRODUCTS[3].id,
-      product: DEMO_PRODUCTS[3],
-      selectedVariants: {},
-      quantity: 2,
-      price: DEMO_PRODUCTS[3].price,
-      sellerId: DEMO_PRODUCTS[3].sellerId,
-      sellerName: DEMO_PRODUCTS[3].sellerName,
-    },
-  ]);
+  // Guest cart in local memory
+  const [demoCart, setDemoCart] = useState<CartItem[]>([]);
 
   const [authCart, setAuthCart] = useState<CartItem[]>([]);
   const [authCartSubtotal, setAuthCartSubtotal] = useState<number>(0);
@@ -144,10 +117,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     authCartRef.current = authCart;
   }, [authCart]);
 
-  const [demoWishlist, setDemoWishlist] = useState<string[]>([
-    DEMO_PRODUCTS[1].id,
-    DEMO_PRODUCTS[4].id,
-  ]);
+  const [demoWishlist, setDemoWishlist] = useState<string[]>([]);
   const [authWishlistIds, setAuthWishlistIds] = useState<string[]>([]);
   const [authWishlistProducts, setAuthWishlistProducts] = useState<Product[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState<boolean>(() => {
@@ -172,21 +142,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   // Auth state: check if an active authenticated backend session exists
   const [authMode, setAuthMode] = useState<AuthMode>(() => {
-    return sessionManager.getSession() ? 'AUTHENTICATED' : 'DEMO';
+    return sessionManager.getSession() ? 'AUTHENTICATED' : 'ANONYMOUS';
   });
 
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     return sessionManager.getSession()?.user ?? null;
   });
 
-  const [addresses, setAddresses] = useState<Address[]>(() => {
-    return sessionManager.getSession() ? [] : DEMO_ADDRESSES;
-  });
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
   const [addressesError, setAddressesError] = useState<string | null>(null);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>(() => {
-    return sessionManager.getSession() ? '' : DEMO_ADDRESSES[0].id;
-  });
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
 
   const [user, setUser] = useState<UserProfile | null>(() => {
     const existing = sessionManager.getSession();
@@ -201,12 +167,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         emailVerified: Boolean(existing.user.isEmailVerified),
       };
     }
-    return DEMO_USER;
+    return null;
   });
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    return sessionManager.getSession() ? [] : DEMO_ORDERS;
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState<boolean>(() => {
     return Boolean(sessionManager.getSession());
   });
@@ -318,14 +282,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const setDemoAuth = () => {
     sessionManager.clearSession();
-    setAuthMode('DEMO');
+    setAuthMode('ANONYMOUS');
     setAuthUser(null);
-    setUser(DEMO_USER);
-    setAddresses(DEMO_ADDRESSES);
-    setSelectedAddressId(DEMO_ADDRESSES[0]?.id || '');
+    setUser(null);
+    setAddresses([]);
+    setSelectedAddressId('');
     setAddressesLoading(false);
     setAddressesError(null);
-    setOrders(DEMO_ORDERS);
+    setOrders([]);
     setOrdersLoading(false);
     setOrdersError(null);
     ordersRequestIdRef.current++;
@@ -408,8 +372,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const fetchAddresses = useCallback(async () => {
     if (authMode !== 'AUTHENTICATED') {
-      setAddresses(DEMO_ADDRESSES);
-      setSelectedAddressId(DEMO_ADDRESSES[0]?.id || '');
+      setAddresses([]);
+      setSelectedAddressId('');
       setAddressesLoading(false);
       setAddressesError(null);
       return;
@@ -488,11 +452,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const fetchOrders = useCallback(async () => {
     if (authMode !== 'AUTHENTICATED') {
-      if (authMode === 'DEMO') {
-        setOrders(DEMO_ORDERS);
-      } else {
-        setOrders([]);
-      }
+      setOrders([]);
       setOrdersLoading(false);
       setOrdersError(null);
       return;
@@ -901,10 +861,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       : demoCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
   const wishlist = authMode === 'AUTHENTICATED' ? authWishlistIds : demoWishlist;
-  const wishlistProducts =
-    authMode === 'AUTHENTICATED'
-      ? authWishlistProducts
-      : DEMO_PRODUCTS.filter((p: Product) => demoWishlist.includes(p.id));
+  const wishlistProducts = authMode === 'AUTHENTICATED' ? authWishlistProducts : [];
 
   const toggleWishlist = async (productId: string) => {
     if (authMode === 'AUTHENTICATED') {

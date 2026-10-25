@@ -45,6 +45,11 @@ export function CartPage() {
   const estimatedShipping = cart.length > 0 ? (cartSubtotal >= 999 ? 0 : 80) : 0;
   const grandTotal = Math.max(0, cartSubtotal + estimatedShipping - couponDiscount);
 
+  // Check if any cart item is unavailable or out of stock
+  const hasUnavailableItems = cart.some(
+    (item) => item.isAvailable === false || (item.availableStock !== undefined && item.quantity > item.availableStock)
+  );
+
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
     if (couponCode.toUpperCase() === 'DESI50') {
@@ -366,11 +371,29 @@ export function CartPage() {
             ⚠️ <strong>Provisional Estimate Notice:</strong> Subtotal is authoritative from the server. Shipping, packaging fees, and promotional discounts shown here are provisional previews and will be authoritatively validated by the backend during checkout.
           </div>
 
+          {hasUnavailableItems && (
+            <div
+              role="alert"
+              style={{
+                padding: '0.6rem 0.8rem',
+                margin: '0.75rem 0',
+                borderRadius: '6px',
+                backgroundColor: '#fee2e2',
+                color: '#b91c1c',
+                fontSize: '0.8rem',
+              }}
+            >
+              ⚠️ Please remove or update out-of-stock or unavailable items before proceeding to checkout.
+            </div>
+          )}
+
           {/* Proceed to checkout CTA */}
           <button
             type="button"
             className="bb-btn bb-btn-primary bb-btn-lg bb-btn-block"
             onClick={() => navigate('/checkout')}
+            disabled={hasUnavailableItems}
+            title={hasUnavailableItems ? 'Remove out-of-stock items to proceed' : 'Proceed to Checkout'}
           >
             Proceed to Checkout →
           </button>

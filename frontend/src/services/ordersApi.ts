@@ -3,6 +3,8 @@ import type {
   CustomerOrderListResponse,
   CustomerOrderDetailResponse,
   CustomerOrderSummary,
+  CustomerCancelOrderPayload,
+  CustomerReturnOrderPayload,
   Order,
   OrderPackage,
   Address,
@@ -186,5 +188,39 @@ export const ordersApi = {
     return apiClient.request<CustomerOrderDetailResponse>(`/orders/my-orders/${encodeURIComponent(orderNumber)}`, {
       method: 'GET',
     });
+  },
+
+  /**
+   * POST /api/v1/orders/my-orders/:orderNumber/cancel
+   * Cancels order and concurrently restores reserved inventory.
+   */
+  async cancelCustomerOrder(
+    orderNumber: string,
+    payload?: CustomerCancelOrderPayload,
+  ): Promise<{ message: string; orderNumber: string; status: string }> {
+    return apiClient.request<{ message: string; orderNumber: string; status: string }>(
+      `/orders/my-orders/${encodeURIComponent(orderNumber)}/cancel`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      },
+    );
+  },
+
+  /**
+   * POST /api/v1/orders/my-orders/:orderNumber/return
+   * Requests return for a delivered package.
+   */
+  async requestCustomerReturn(
+    orderNumber: string,
+    payload: CustomerReturnOrderPayload,
+  ): Promise<{ message: string; subOrderNumber: string; status: string }> {
+    return apiClient.request<{ message: string; subOrderNumber: string; status: string }>(
+      `/orders/my-orders/${encodeURIComponent(orderNumber)}/return`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
   },
 };

@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ShopStatus } from '../generated/prisma/client.js';
+import { ShopStatus, ProductStatus } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   AdminUpdateShopStatusDto,
@@ -202,14 +202,26 @@ export class ShopsService {
     const limit = query.limit && query.limit > 0 ? query.limit : 20;
     const skip = (page - 1) * limit;
 
-    const statusFilter = query.status ?? ShopStatus.PENDING_APPROVAL;
+    const statusFilter = query.status;
+    const search = (query as any).search?.trim();
+    const whereClause: any = {};
+    if (statusFilter) whereClause.status = statusFilter;
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { slug: { contains: search, mode: 'insensitive' } },
+        { seller: { email: { contains: search, mode: 'insensitive' } } },
+        { seller: { firstName: { contains: search, mode: 'insensitive' } } },
+        { seller: { lastName: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
 
     const [total, shops] = await Promise.all([
       this.prisma.shop.count({
-        where: { status: statusFilter },
+        where: whereClause,
       }),
       this.prisma.shop.findMany({
-        where: { status: statusFilter },
+        where: whereClause,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -218,7 +230,8 @@ export class ShopsService {
             select: {
               id: true,
               email: true,
-              fullName: true,
+              firstName: true,
+              lastName: true,
               phone: true,
               isEmailVerified: true,
             },
@@ -255,7 +268,8 @@ export class ShopsService {
           select: {
             id: true,
             email: true,
-            fullName: true,
+            firstName: true,
+            lastName: true,
             phone: true,
             isEmailVerified: true,
             createdAt: true,
@@ -265,7 +279,8 @@ export class ShopsService {
         approvedBy: {
           select: {
             id: true,
-            fullName: true,
+            firstName: true,
+            lastName: true,
             email: true,
           },
         },
@@ -395,5 +410,38 @@ export class ShopsService {
       createdAt: shop.createdAt,
       updatedAt: shop.updatedAt,
     };
+  }
+
+  /**
+   * Public: Retrieves list of approved vendor shops for customer discovery and filters.
+   */
+  async getPublicApprovedShops() {
+    return this.prisma.shop.findMany({
+      where: { status: ShopStatus.APPROVED },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        logoUrl: true,
+        bannerUrl: true,
+        status: true,
+        createdAt: true,
+        pickupAddress: {
+          select: {
+            city: true,
+            state: true,
+          },
+        },
+        _count: {
+          select: {
+            products: {
+              where: { status: ProductStatus.PUBLISHED },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 }

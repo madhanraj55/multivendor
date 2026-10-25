@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,8 @@ import {
   QueryAdminOrdersDto,
 } from './dto/admin-order.dto.js';
 import {
+  CustomerCancelOrderDto,
+  CustomerReturnOrderDto,
   QueryOrdersDto,
   QuerySellerOrdersDto,
   UpdateSellerOrderStatusDto,
@@ -51,6 +54,28 @@ export class OrdersController {
     @Param('orderNumber') orderNumber: string,
   ) {
     return this.ordersService.getCustomerOrderByNumber(userId, orderNumber);
+  }
+
+  @Roles(UserRole.CUSTOMER, UserRole.ADMIN, UserRole.SELLER)
+  @Post('orders/my-orders/:orderNumber/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancelCustomerOrder(
+    @CurrentUser('userId') userId: string,
+    @Param('orderNumber') orderNumber: string,
+    @Body() dto: CustomerCancelOrderDto,
+  ) {
+    return this.ordersService.customerCancelOrder(userId, orderNumber, dto);
+  }
+
+  @Roles(UserRole.CUSTOMER, UserRole.ADMIN, UserRole.SELLER)
+  @Post('orders/my-orders/:orderNumber/return')
+  @HttpCode(HttpStatus.OK)
+  async requestCustomerReturn(
+    @CurrentUser('userId') userId: string,
+    @Param('orderNumber') orderNumber: string,
+    @Body() dto: CustomerReturnOrderDto,
+  ) {
+    return this.ordersService.customerRequestReturn(userId, orderNumber, dto);
   }
 
   // ---------------------------------------------------------------------------

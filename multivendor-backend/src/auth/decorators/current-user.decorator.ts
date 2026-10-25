@@ -12,6 +12,8 @@ export const CurrentUser = createParamDecorator(
     const request = ctx.switchToHttp().getRequest();
     const user = request.user as CurrentUserPayload | undefined;
     if (!user) return null;
+    const resolvedUserId = (user as any).userId || (user as any).sub || (user as any).id;
+    if (data === 'userId') return resolvedUserId;
     return data ? user[data] : user;
   },
 );

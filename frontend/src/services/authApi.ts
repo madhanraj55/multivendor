@@ -9,6 +9,9 @@ import type {
   AuthUser,
   UpdateProfilePayload,
   ChangePasswordPayload,
+  ForgotPasswordPayload,
+  ForgotPasswordResponse,
+  ResetPasswordPayload,
 } from '../types/index.ts';
 
 export const authApi = {
@@ -130,6 +133,30 @@ export const authApi = {
     return apiClient.request<{ message: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * POST /api/v1/auth/forgot-password
+   * Triggers password reset token generation.
+   */
+  async forgotPassword(payload: ForgotPasswordPayload): Promise<ForgotPasswordResponse> {
+    return apiClient.request<ForgotPasswordResponse>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuth: true,
+    });
+  },
+
+  /**
+   * POST /api/v1/auth/reset-password
+   * Sets new password using verification token.
+   */
+  async resetPassword(payload: ResetPasswordPayload): Promise<{ message: string }> {
+    return apiClient.request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuth: true,
     });
   },
 };

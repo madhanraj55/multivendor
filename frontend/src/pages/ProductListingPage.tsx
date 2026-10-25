@@ -1,19 +1,26 @@
-import { useState, useMemo } from 'react';
-import { DEMO_PRODUCTS, DEMO_CATEGORIES, DEMO_SELLERS } from '../data/demoData.ts';
+import { useState, useEffect, useMemo } from 'react';
+import { publicCatalogApi, mapPublishedProductToUi, type PublicApprovedShop } from '../services/publicCatalogApi.ts';
+import { categoriesApi } from '../services/categoriesApi.ts';
 import { ProductCard } from '../components/common/ProductCard.tsx';
-import { EmptyState } from '../components/common/StateViews.tsx';
+import { EmptyState, LoadingSpinner } from '../components/common/StateViews.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
-import type { Product, Category, Seller } from '../types/index.ts';
+import type { Product, BackendCategory } from '../types/index.ts';
 import './ProductListingPage.css';
 
 export function ProductListingPage() {
   const { queryParams, navigate } = useRouter();
 
-  const selectedCategorySlug = queryParams.category || 'all';
+  const selectedCategoryQuery = queryParams.category || 'all';
   const selectedSellerId = queryParams.seller || 'all';
   const searchQuery = queryParams.q || '';
 
-  const [activeCategory, setActiveCategory] = useState(selectedCategorySlug);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<BackendCategory[]>([]);
+  const [shops, setShops] = useState<PublicApprovedShop[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [activeCategory, setActiveCategory] = useState(selectedCategoryQuery);
   const [activeSeller, setActiveSeller] = useState(selectedSellerId);
   const [minPrice, setMinPrice] = useState<number>(0);
   const [maxPrice, setMaxPrice] = useState<number>(10000);
@@ -22,13 +29,52 @@ export function ProductListingPage() {
   const [sortBy, setSortBy] = useState('featured');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
+  // Sync state if query parameters change
+  useEffect(() => {
+    setActiveCategory(queryParams.category || 'all');
+  }, [queryParams.category]);
+
+  useEffect(() => {
+    setActiveSeller(queryParams.seller || 'all');
+  }, [queryParams.seller]);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [prodsRes, catsRes, shopsRes] = await Promise.all([
+        publicCatalogApi.getPublishedProducts({
+          search: searchQuery || undefined,
+          limit: 50,
+        }),
+        categoriesApi.getCategories().catch(() => [] as BackendCategory[]),
+        publicCatalogApi.getApprovedShops().catch(() => [] as PublicApprovedShop[]),
+      ]);
+
+      setProducts(prodsRes.items.map(mapPublishedProductToUi));
+      setCategories(catsRes);
+      setShops(shopsRes);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to retrieve products from marketplace';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [searchQuery]);
+
   // Compute filtered products
   const filteredProducts = useMemo(() => {
-    return DEMO_PRODUCTS.filter((product: Product) => {
-      // Category filter
+    return products.filter((product: Product) => {
+      // Category filter (match by id or slug)
       if (activeCategory !== 'all') {
-        const cat = DEMO_CATEGORIES.find((c: Category) => c.slug === activeCategory);
-        if (cat && product.categoryId !== cat.id) {
+        const catObj = categories.find((c) => c.id === activeCategory || c.slug === activeCategory);
+        if (catObj && product.categoryId !== catObj.id) {
+          return false;
+        } else if (!catObj && product.categoryId !== activeCategory) {
           return false;
         }
       }
@@ -38,41 +84,44 @@ export function ProductListingPage() {
         return false;
       }
 
-      // Search query
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = product.title.toLowerCase().includes(q);
-        const matchesBrand = product.brand.toLowerCase().includes(q);
-        const matchesSeller = product.sellerName.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesBrand && !matchesSeller) {
-          return false;
-        }
-      }
-
-      // Price range
-      if (product.price < minPrice || product.price > maxPrice) {
+      // Price filter
+      if (product.price < minPrice || (maxPrice > 0 && product.price > maxPrice)) {
         return false;
       }
 
-      // Rating
-      if (minRating > 0 && product.rating < minRating) {
-        return false;
-      }
-
-      // Stock
+      // Stock filter
       if (inStockOnly && !product.inStock) {
         return false;
       }
 
+      // Rating filter
+      if (minRating > 0 && product.rating < minRating) {
+        return false;
+      }
+
       return true;
-    }).sort((a: Product, b: Product) => {
-      if (sortBy === 'price-low') return a.price - b.price;
-      if (sortBy === 'price-high') return b.price - a.price;
-      if (sortBy === 'rating') return b.rating - a.rating;
-      if (sortBy === 'discount') return b.discountPercent - a.discountPercent;
-      return 0; // 'featured' keeps original order
     });
-  }, [activeCategory, activeSeller, searchQuery, minPrice, maxPrice, minRating, inStockOnly, sortBy]);
+  }, [products, categories, activeCategory, activeSeller, minPrice, maxPrice, inStockOnly, minRating]);
+
+  // Sort products
+  const sortedProducts = useMemo(() => {
+    const list = [...filteredProducts];
+    switch (sortBy) {
+      case 'price-asc':
+        return list.sort((a, b) => a.price - b.price);
+      case 'price-desc':
+        return list.sort((a, b) => b.price - a.price);
+      case 'rating':
+        return list.sort((a, b) => b.rating - a.rating);
+      case 'newest':
+        return list.sort((a, b) => b.id.localeCompare(a.id));
+      default:
+        return list;
+    }
+  }, [filteredProducts, sortBy]);
+
+  const currentCategoryObj = categories.find((c) => c.id === activeCategory || c.slug === activeCategory);
+  const currentSellerObj = shops.find((s) => s.id === activeSeller);
 
   const clearAllFilters = () => {
     setActiveCategory('all');
@@ -81,169 +130,149 @@ export function ProductListingPage() {
     setMaxPrice(10000);
     setMinRating(0);
     setInStockOnly(false);
+    setSortBy('featured');
+    navigate('/products');
   };
-
-  const currentCategoryObj = DEMO_CATEGORIES.find((c: Category) => c.slug === activeCategory);
 
   return (
     <div className="bb-container bb-plp-container">
       {/* Breadcrumb */}
       <nav className="bb-breadcrumb" aria-label="Breadcrumb">
-        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>
+        <button type="button" onClick={() => navigate('/')} className="bb-breadcrumb-link">
           Home
-        </a>
-        <span>/</span>
-        <a href="/products" onClick={(e) => { e.preventDefault(); navigate('/products'); }}>
+        </button>
+        <span className="bb-breadcrumb-separator">›</span>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveCategory('all');
+            setActiveSeller('all');
+            navigate('/products');
+          }}
+          className="bb-breadcrumb-link"
+        >
           All Products
-        </a>
+        </button>
         {currentCategoryObj && (
           <>
-            <span>/</span>
+            <span className="bb-breadcrumb-separator">›</span>
             <span className="bb-breadcrumb-current">{currentCategoryObj.name}</span>
+          </>
+        )}
+        {currentSellerObj && (
+          <>
+            <span className="bb-breadcrumb-separator">›</span>
+            <span className="bb-breadcrumb-current">{currentSellerObj.name}</span>
           </>
         )}
       </nav>
 
-      {/* Header & Meta Bar */}
+      {/* Header Banner */}
       <div className="bb-plp-header">
         <div>
           <h1 className="bb-plp-title">
-            {currentCategoryObj ? currentCategoryObj.name : 'Explore All Marketplace Products'}
+            {searchQuery
+              ? `Search Results for "${searchQuery}"`
+              : currentCategoryObj
+              ? currentCategoryObj.name
+              : currentSellerObj
+              ? `Products from ${currentSellerObj.name}`
+              : 'All Marketplace Products'}
           </h1>
-          <p className="bb-plp-count">
-            Showing <strong>{filteredProducts.length}</strong> authentic products across verified Indian stores
+          <p className="bb-plp-subtitle">
+            {searchQuery
+              ? `Showing verified results matching your search`
+              : currentCategoryObj?.description
+              ? currentCategoryObj.description
+              : 'Authentic products sourced directly from registered Indian merchants'}
           </p>
         </div>
 
-        {/* Controls: Sort + Mobile Filter Toggle */}
-        <div className="bb-plp-controls">
-          <button
-            type="button"
-            className="bb-mobile-filter-trigger"
-            onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
-            aria-label="Toggle filter drawer"
-          >
-            <span>⚙️ Filters ({filteredProducts.length})</span>
-          </button>
-
-          <div className="bb-sort-wrap">
-            <label htmlFor="sortSelect" className="bb-sort-label">
-              Sort by:
-            </label>
-            <select
-              id="sortSelect"
-              className="bb-select bb-sort-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              <option value="featured">Featured & Recommended</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Highest Customer Rating</option>
-              <option value="discount">Biggest Discount (%)</option>
-            </select>
-          </div>
-        </div>
+        {/* Mobile Filter Trigger */}
+        <button
+          type="button"
+          className="bb-btn bb-btn-outline bb-mobile-filter-btn"
+          onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
+        >
+          ⚙ Filters & Sort
+        </button>
       </div>
 
-      {/* Main Grid: Sidebar + Products */}
+      {/* Main Layout: Sidebar Filters + Product Grid */}
       <div className="bb-plp-layout">
-        {/* Filter Drawer / Sidebar */}
-        <aside className={`bb-filter-sidebar ${mobileFilterOpen ? 'open' : ''}`}>
+        {/* Filter Sidebar */}
+        <aside
+          className={`bb-plp-sidebar ${mobileFilterOpen ? 'open' : ''}`}
+          aria-label="Product catalogue filters"
+        >
           <div className="bb-filter-header">
-            <h2 className="bb-filter-title">Filters</h2>
+            <span className="bb-filter-title">Filters</span>
             <button
               type="button"
-              className="bb-filter-reset"
+              className="bb-clear-filter-btn"
               onClick={clearAllFilters}
             >
               Reset All
             </button>
           </div>
 
-          {/* Active Filter Chips */}
-          {(activeCategory !== 'all' || activeSeller !== 'all' || minRating > 0 || inStockOnly) && (
-            <div className="bb-active-filters-chips">
-              {activeCategory !== 'all' && (
-                <span className="bb-filter-chip">
-                  {currentCategoryObj?.name || activeCategory}
-                  <button type="button" onClick={() => setActiveCategory('all')}>×</button>
-                </span>
-              )}
-              {activeSeller !== 'all' && (
-                <span className="bb-filter-chip">
-                  Store: {activeSeller}
-                  <button type="button" onClick={() => setActiveSeller('all')}>×</button>
-                </span>
-              )}
-              {inStockOnly && (
-                <span className="bb-filter-chip">
-                  In Stock Only
-                  <button type="button" onClick={() => setInStockOnly(false)}>×</button>
-                </span>
-              )}
-              {minRating > 0 && (
-                <span className="bb-filter-chip">
-                  ★ {minRating}+ Rating
-                  <button type="button" onClick={() => setMinRating(0)}>×</button>
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Category Filter */}
-          <div className="bb-filter-group">
-            <span className="bb-filter-group-title">Category</span>
-            <div className="bb-filter-list">
-              <label className="bb-filter-label">
-                <input
-                  type="radio"
-                  name="catFilter"
-                  checked={activeCategory === 'all'}
-                  onChange={() => setActiveCategory('all')}
-                />
-                All Categories
-              </label>
-              {DEMO_CATEGORIES.map((cat: Category) => (
-                <label key={cat.id} className="bb-filter-label">
+          {/* Categories Filter */}
+          {categories.length > 0 && (
+            <div className="bb-filter-group">
+              <span className="bb-filter-group-title">Category</span>
+              <div className="bb-filter-list">
+                <label className="bb-filter-label">
                   <input
                     type="radio"
                     name="catFilter"
-                    checked={activeCategory === cat.slug}
-                    onChange={() => setActiveCategory(cat.slug)}
+                    checked={activeCategory === 'all'}
+                    onChange={() => setActiveCategory('all')}
                   />
-                  {cat.icon} {cat.name}
+                  All Categories
                 </label>
-              ))}
+                {categories.map((cat) => (
+                  <label key={cat.id} className="bb-filter-label">
+                    <input
+                      type="radio"
+                      name="catFilter"
+                      checked={activeCategory === cat.id || activeCategory === cat.slug}
+                      onChange={() => setActiveCategory(cat.id)}
+                    />
+                    {cat.name}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Verified Multi-Vendor Filter */}
-          <div className="bb-filter-group">
-            <span className="bb-filter-group-title">Filter by Seller</span>
-            <div className="bb-filter-list">
-              <label className="bb-filter-label">
-                <input
-                  type="radio"
-                  name="sellerFilter"
-                  checked={activeSeller === 'all'}
-                  onChange={() => setActiveSeller('all')}
-                />
-                All Sellers
-              </label>
-              {DEMO_SELLERS.map((seller: Seller) => (
-                <label key={seller.id} className="bb-filter-label">
+          {shops.length > 0 && (
+            <div className="bb-filter-group">
+              <span className="bb-filter-group-title">Filter by Seller</span>
+              <div className="bb-filter-list">
+                <label className="bb-filter-label">
                   <input
                     type="radio"
                     name="sellerFilter"
-                    checked={activeSeller === seller.id}
-                    onChange={() => setActiveSeller(seller.id)}
+                    checked={activeSeller === 'all'}
+                    onChange={() => setActiveSeller('all')}
                   />
-                  {seller.storeName}
+                  All Sellers
                 </label>
-              ))}
+                {shops.map((seller) => (
+                  <label key={seller.id} className="bb-filter-label">
+                    <input
+                      type="radio"
+                      name="sellerFilter"
+                      checked={activeSeller === seller.id}
+                      onChange={() => setActiveSeller(seller.id)}
+                    />
+                    {seller.name}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Price Range Filter */}
           <div className="bb-filter-group">
@@ -262,39 +291,12 @@ export function ProductListingPage() {
                 placeholder="Max"
                 className="bb-price-input"
                 value={maxPrice || ''}
-                onChange={(e) => setMaxPrice(Number(e.target.value) || 10000)}
+                onChange={(e) => setMaxPrice(Number(e.target.value) || 0)}
               />
             </div>
           </div>
 
-          {/* Minimum Rating */}
-          <div className="bb-filter-group">
-            <span className="bb-filter-group-title">Customer Ratings</span>
-            <div className="bb-filter-list">
-              {[4, 3, 2].map((stars) => (
-                <label key={stars} className="bb-filter-label">
-                  <input
-                    type="radio"
-                    name="ratingFilter"
-                    checked={minRating === stars}
-                    onChange={() => setMinRating(stars)}
-                  />
-                  <span>★ {stars}.0 & above</span>
-                </label>
-              ))}
-              {minRating > 0 && (
-                <button
-                  type="button"
-                  className="bb-clear-mini-btn"
-                  onClick={() => setMinRating(0)}
-                >
-                  Clear rating filter
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Stock Filter */}
+          {/* Availability */}
           <div className="bb-filter-group">
             <span className="bb-filter-group-title">Availability</span>
             <label className="bb-filter-label">
@@ -303,37 +305,93 @@ export function ProductListingPage() {
                 checked={inStockOnly}
                 onChange={(e) => setInStockOnly(e.target.checked)}
               />
-              Exclude Out of Stock
+              In Stock Only
             </label>
           </div>
 
-          {mobileFilterOpen && (
-            <button
-              type="button"
-              className="bb-btn bb-btn-primary bb-btn-block"
-              onClick={() => setMobileFilterOpen(false)}
-            >
-              Apply Filters ({filteredProducts.length} Results)
-            </button>
-          )}
+          {/* Customer Rating */}
+          <div className="bb-filter-group">
+            <span className="bb-filter-group-title">Minimum Rating</span>
+            <div className="bb-filter-list">
+              {[4, 3, 2].map((r) => (
+                <label key={r} className="bb-filter-label">
+                  <input
+                    type="radio"
+                    name="ratingFilter"
+                    checked={minRating === r}
+                    onChange={() => setMinRating(r)}
+                  />
+                  ★ {r} stars & above
+                </label>
+              ))}
+              <label className="bb-filter-label">
+                <input
+                  type="radio"
+                  name="ratingFilter"
+                  checked={minRating === 0}
+                  onChange={() => setMinRating(0)}
+                />
+                Any Rating
+              </label>
+            </div>
+          </div>
         </aside>
 
         {/* Product Grid Area */}
-        <section aria-label="Catalog Products">
-          {filteredProducts.length > 0 ? (
-            <div className="bb-product-grid">
-              {filteredProducts.map((product: Product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
+        <section className="bb-plp-content" aria-label="Catalog Products">
+          {/* Top Bar: Count & Sorting */}
+          <div className="bb-plp-controls">
+            <span className="bb-plp-count">
+              Showing <strong>{sortedProducts.length}</strong> items
+            </span>
+
+            <div className="bb-sort-wrap">
+              <label htmlFor="bb-sort-select" className="bb-sort-label">
+                Sort by:
+              </label>
+              <select
+                id="bb-sort-select"
+                className="bb-sort-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="featured">Featured & Recommended</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+                <option value="rating">Customer Rating</option>
+                <option value="newest">Newest Arrivals</option>
+              </select>
             </div>
-          ) : (
+          </div>
+
+          {/* States: Loading, Error, Empty, List */}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <LoadingSpinner />
+              <p style={{ marginTop: '16px', color: '#64748b' }}>Retrieving live catalogue items from database...</p>
+            </div>
+          ) : error ? (
+            <EmptyState
+              icon="⚠️"
+              title="Unable to Load Products"
+              description={error}
+              actionText="Retry Search"
+              onAction={loadData}
+            />
+          ) : sortedProducts.length === 0 ? (
             <EmptyState
               icon="🔍"
-              title="No products found"
-              description="No products matched your active filters or search terms. Try clearing filters to see more results."
+              title="No Products Match Your Criteria"
+              description="Try adjusting your filters, searching for different keywords, or exploring other categories."
               actionText="Reset All Filters"
               onAction={clearAllFilters}
             />
+          ) : (
+            <div className="bb-product-grid">
+              {sortedProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
           )}
         </section>
       </div>

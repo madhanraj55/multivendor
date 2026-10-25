@@ -1,8 +1,18 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from '../../context/RouterContext.tsx';
 import { useMarketplace } from '../../context/MarketplaceContext.tsx';
-import { DEMO_CATEGORIES } from '../../data/demoData.ts';
+import { categoriesApi } from '../../services/categoriesApi.ts';
+import type { BackendCategory } from '../../types/index.ts';
 import './Header.css';
+
+const DEFAULT_ICONS: Record<string, string> = {
+  'electronics': '⚡',
+  'fashion': '👗',
+  'home-living': '🏡',
+  'artisans-handloom': '🧵',
+  'grocery-gourmet': '🌾',
+  'beauty-personal-care': '🌿',
+};
 
 export function Header() {
   const { navigate, path } = useRouter();
@@ -18,11 +28,25 @@ export function Header() {
     setSearchQuery,
   } = useMarketplace();
 
+  const [categories, setCategories] = useState<BackendCategory[]>([]);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showPincodePrompt, setShowPincodePrompt] = useState(false);
   const [tempPincode, setTempPincode] = useState(pincode);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    categoriesApi
+      .getCategories()
+      .then((data) => {
+        if (mounted) setCategories(data);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -62,6 +86,18 @@ export function Header() {
             {authUser?.role === 'ADMIN' && (
               <>
                 <a
+                  href="/admin/dashboard"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/admin/dashboard');
+                  }}
+                  className="bb-top-link"
+                  style={{ color: '#fed7aa', fontWeight: 'bold' }}
+                >
+                  📊 Dashboard
+                </a>
+                <span className="bb-top-divider">|</span>
+                <a
                   href="/admin/orders"
                   onClick={(e) => {
                     e.preventDefault();
@@ -70,7 +106,31 @@ export function Header() {
                   className="bb-top-link"
                   style={{ color: '#fed7aa', fontWeight: 'bold' }}
                 >
-                  🛡️ Admin Orders
+                  🛡️ Orders
+                </a>
+                <span className="bb-top-divider">|</span>
+                <a
+                  href="/admin/sellers"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/admin/sellers');
+                  }}
+                  className="bb-top-link"
+                  style={{ color: '#fed7aa', fontWeight: 'bold' }}
+                >
+                  🏬 Sellers
+                </a>
+                <span className="bb-top-divider">|</span>
+                <a
+                  href="/admin/customers"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/admin/customers');
+                  }}
+                  className="bb-top-link"
+                  style={{ color: '#fed7aa', fontWeight: 'bold' }}
+                >
+                  👥 Customers
                 </a>
                 <span className="bb-top-divider">|</span>
               </>
@@ -153,8 +213,8 @@ export function Header() {
               aria-label="Filter category"
             >
               <option value="all">All Categories</option>
-              {DEMO_CATEGORIES.map((cat) => (
-                <option key={cat.id} value={cat.slug}>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
                   {cat.name}
                 </option>
               ))}
@@ -201,17 +261,17 @@ export function Header() {
               </button>
             )}
 
-            {/* Seller Orders Portal Button */}
+            {/* Seller Dashboard Portal Button */}
             {authUser?.role === 'SELLER' && (
               <button
                 type="button"
                 className="bb-header-btn"
-                onClick={() => navigate('/seller/orders')}
-                aria-label="Vendor Orders Dashboard"
-                title="Vendor Orders Dashboard"
+                onClick={() => navigate('/seller/dashboard')}
+                aria-label="Vendor Control Dashboard"
+                title="Vendor Control Dashboard"
               >
                 <span className="bb-header-btn-icon">🏬</span>
-                <span className="bb-header-btn-label">Vendor</span>
+                <span className="bb-header-btn-label">Dashboard</span>
               </button>
             )}
 
@@ -277,19 +337,19 @@ export function Header() {
                 <span>🔥</span> All Products
               </a>
             </li>
-            {DEMO_CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <li key={cat.id}>
                 <a
-                  href={`/products?category=${cat.slug}`}
+                  href={`/products?category=${cat.id}`}
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate(`/products?category=${cat.slug}`);
+                    navigate(`/products?category=${cat.id}`);
                   }}
                   className={`bb-nav-item-link ${
-                    path.includes(`/products?category=${cat.slug}`) ? 'active' : ''
+                    path.includes(`/products?category=${cat.id}`) ? 'active' : ''
                   }`}
                 >
-                  <span>{cat.icon}</span> {cat.name}
+                  <span>{DEFAULT_ICONS[cat.slug] || '📦'}</span> {cat.name}
                 </a>
               </li>
             ))}
@@ -467,17 +527,17 @@ export function Header() {
                   <span>⚡ All Products</span>
                   <span>→</span>
                 </button>
-                {DEMO_CATEGORIES.map((cat) => (
+                {categories.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
                     className="bb-drawer-link"
                     onClick={() => {
                       setIsMobileMenuOpen(false);
-                      navigate(`/products?category=${cat.slug}`);
+                      navigate(`/products?category=${cat.id}`);
                     }}
                   >
-                    <span>{cat.icon} {cat.name}</span>
+                    <span>{DEFAULT_ICONS[cat.slug] || '📦'} {cat.name}</span>
                     <span>→</span>
                   </button>
                 ))}

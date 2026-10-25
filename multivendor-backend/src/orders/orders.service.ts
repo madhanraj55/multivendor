@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  MovementType,
   OrderStatus,
   Prisma,
   SellerOrderStatus,
@@ -16,6 +17,8 @@ import {
   QueryAdminOrdersDto,
 } from './dto/admin-order.dto.js';
 import {
+  CustomerCancelOrderDto,
+  CustomerReturnOrderDto,
   QueryOrdersDto,
   QuerySellerOrdersDto,
   UpdateSellerOrderStatusDto,
@@ -200,6 +203,306 @@ export class OrdersService {
         statusHistory: so.statusHistory,
       })),
     };
+  }
+  /**
+   * Concurrency-safe inventory restoration helper with audit trail.
+   * Restores reserved stock back to availableQuantity and logs ORDER_CANCELLATION.
+   * Deterministic sort by variantId prevents lock ordering deadlocks.
+   */
+  private async restoreInventoryForOrderItems(
+    tx: Prisma.TransactionClient,
+    items: Array<{ variantId: string; quantity: number }>,
+    userId: string,
+    reason: string,
+    referenceId: string,
+  ) {
+    const sortedItems = [...items].sort((a, b) => a.variantId.localeCompare(b.variantId));
+
+    for (const item of sortedItems) {
+      const updatedRows = await tx.$queryRaw<
+        Array<{ id: string; availableQuantity: number; reservedQuantity: number }>
+      >`
+        UPDATE "Inventory"
+        SET "availableQuantity" = "availableQuantity" + ${item.quantity},
+            "reservedQuantity"  = GREATEST(0, "reservedQuantity" - ${item.quantity}),
+            "updatedAt"         = NOW()
+        WHERE "variantId" = ${item.variantId}::uuid
+        RETURNING "id", "availableQuantity", "reservedQuantity";
+      `;
+
+      if (updatedRows && updatedRows.length > 0) {
+        await tx.inventoryMovement.create({
+          data: {
+            inventoryId: updatedRows[0].id,
+            movementType: MovementType.ORDER_CANCELLATION,
+            quantity: item.quantity,
+            balanceAfter: updatedRows[0].availableQuantity,
+            referenceId,
+            notes: `Stock restored due to cancellation: ${reason}`,
+            createdById: userId,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Concurrency-safe inventory fulfillment helper with audit trail.
+   * Decreases reservedQuantity upon delivery completion and logs ORDER_FULFILLMENT.
+   */
+  private async fulfillInventoryForOrderItems(
+    tx: Prisma.TransactionClient,
+    items: Array<{ variantId: string; quantity: number }>,
+    userId: string,
+    referenceId: string,
+  ) {
+    const sortedItems = [...items].sort((a, b) => a.variantId.localeCompare(b.variantId));
+
+    for (const item of sortedItems) {
+      const updatedRows = await tx.$queryRaw<
+        Array<{ id: string; availableQuantity: number; reservedQuantity: number }>
+      >`
+        UPDATE "Inventory"
+        SET "reservedQuantity"  = GREATEST(0, "reservedQuantity" - ${item.quantity}),
+            "updatedAt"         = NOW()
+        WHERE "variantId" = ${item.variantId}::uuid
+        RETURNING "id", "availableQuantity", "reservedQuantity";
+      `;
+
+      if (updatedRows && updatedRows.length > 0) {
+        await tx.inventoryMovement.create({
+          data: {
+            inventoryId: updatedRows[0].id,
+            movementType: MovementType.ORDER_FULFILLMENT,
+            quantity: item.quantity,
+            balanceAfter: updatedRows[0].availableQuantity,
+            referenceId,
+            notes: `Stock fulfilled upon delivery for sub-order ${referenceId}`,
+            createdById: userId,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Concurrency-safe inventory return restock helper with audit trail.
+   * Restores returned items to availableQuantity and logs RETURN_RESTOCK.
+   */
+  private async returnRestockInventoryForOrderItems(
+    tx: Prisma.TransactionClient,
+    items: Array<{ variantId: string; quantity: number }>,
+    userId: string,
+    referenceId: string,
+    reason: string,
+  ) {
+    const sortedItems = [...items].sort((a, b) => a.variantId.localeCompare(b.variantId));
+
+    for (const item of sortedItems) {
+      const updatedRows = await tx.$queryRaw<
+        Array<{ id: string; availableQuantity: number; reservedQuantity: number }>
+      >`
+        UPDATE "Inventory"
+        SET "availableQuantity" = "availableQuantity" + ${item.quantity},
+            "updatedAt"         = NOW()
+        WHERE "variantId" = ${item.variantId}::uuid
+        RETURNING "id", "availableQuantity", "reservedQuantity";
+      `;
+
+      if (updatedRows && updatedRows.length > 0) {
+        await tx.inventoryMovement.create({
+          data: {
+            inventoryId: updatedRows[0].id,
+            movementType: MovementType.RETURN_RESTOCK,
+            quantity: item.quantity,
+            balanceAfter: updatedRows[0].availableQuantity,
+            referenceId,
+            notes: `Stock restocked from customer return: ${reason}`,
+            createdById: userId,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Customer order cancellation.
+   * Customers may cancel orders that are PENDING_PAYMENT or CONFIRMED.
+   * Concurrently releases reserved inventory for all sub-orders and logs audit trails.
+   */
+  async customerCancelOrder(
+    userId: string,
+    orderNumber: string,
+    dto: CustomerCancelOrderDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { orderNumber },
+        include: {
+          sellerOrders: {
+            include: { items: true },
+          },
+        },
+      });
+
+      if (!order || order.customerId !== userId) {
+        throw new NotFoundException(`Order "${orderNumber}" not found`);
+      }
+
+      if (order.status === OrderStatus.CANCELLED) {
+        throw new BadRequestException('Order is already cancelled');
+      }
+
+      if (
+        order.status !== OrderStatus.PENDING_PAYMENT &&
+        order.status !== OrderStatus.CONFIRMED
+      ) {
+        throw new BadRequestException(
+          `Cannot cancel order in status "${order.status}". Only PENDING_PAYMENT or CONFIRMED orders can be cancelled. For shipped/delivered packages, please request a return.`,
+        );
+      }
+
+      const anyInTransit = order.sellerOrders.some(
+        (so) =>
+          so.status === SellerOrderStatus.SHIPPED ||
+          so.status === SellerOrderStatus.DELIVERED,
+      );
+      if (anyInTransit) {
+        throw new BadRequestException(
+          'Cannot cancel order because one or more packages are already shipped or delivered.',
+        );
+      }
+
+      const cancelReason = dto.reason ? `[Customer: ${dto.reason}]` : '[Customer Cancellation]';
+
+      // 1. Update root order
+      const updatedOrder = await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: OrderStatus.CANCELLED,
+          notes: order.notes ? `${order.notes} ${cancelReason}` : cancelReason,
+        },
+      });
+
+      // 2. Log root order history
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          status: OrderStatus.CANCELLED,
+          notes: dto.reason || 'Order cancelled by customer',
+          changedById: userId,
+        },
+      });
+
+      // 3. Cancel each sub-order and restore reserved inventory
+      for (const so of order.sellerOrders) {
+        if (so.status !== SellerOrderStatus.CANCELLED) {
+          await this.restoreInventoryForOrderItems(
+            tx,
+            so.items,
+            userId,
+            dto.reason || 'Customer order cancellation',
+            so.subOrderNumber,
+          );
+
+          await tx.sellerOrder.update({
+            where: { id: so.id },
+            data: {
+              status: SellerOrderStatus.CANCELLED,
+              cancellationReason: dto.reason || 'Customer order cancellation',
+            },
+          });
+
+          await tx.orderStatusHistory.create({
+            data: {
+              sellerOrderId: so.id,
+              status: SellerOrderStatus.CANCELLED,
+              notes: dto.reason || 'Sub-order cancelled by customer',
+              changedById: userId,
+            },
+          });
+        }
+      }
+
+      return {
+        message: 'Order successfully cancelled and reserved inventory restored.',
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
+      };
+    });
+  }
+
+  /**
+   * Customer return request for delivered packages.
+   * Validates return eligibility and return window (7 days).
+   */
+  async customerRequestReturn(
+    userId: string,
+    orderNumber: string,
+    dto: CustomerReturnOrderDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { orderNumber },
+        include: {
+          sellerOrders: {
+            where: { subOrderNumber: dto.subOrderNumber },
+            include: { items: true },
+          },
+        },
+      });
+
+      if (!order || order.customerId !== userId) {
+        throw new NotFoundException(`Order "${orderNumber}" not found`);
+      }
+
+      const subOrder = order.sellerOrders[0];
+      if (!subOrder) {
+        throw new NotFoundException(
+          `Package "${dto.subOrderNumber}" not found in this order`,
+        );
+      }
+
+      if (subOrder.status !== SellerOrderStatus.DELIVERED) {
+        throw new BadRequestException(
+          `Return can only be requested for DELIVERED packages. Current status is "${subOrder.status}".`,
+        );
+      }
+
+      if (subOrder.deliveredAt) {
+        const daysSinceDelivery =
+          (Date.now() - new Date(subOrder.deliveredAt).getTime()) /
+          (1000 * 60 * 60 * 24);
+        if (daysSinceDelivery > 7) {
+          throw new BadRequestException(
+            'The 7-day return window for this delivered package has passed.',
+          );
+        }
+      }
+
+      const updatedSubOrder = await tx.sellerOrder.update({
+        where: { id: subOrder.id },
+        data: {
+          status: SellerOrderStatus.RETURN_REQUESTED,
+          cancellationReason: dto.reason,
+        },
+      });
+
+      await tx.orderStatusHistory.create({
+        data: {
+          sellerOrderId: subOrder.id,
+          status: SellerOrderStatus.RETURN_REQUESTED,
+          notes: `Customer requested return: ${dto.reason}`,
+          changedById: userId,
+        },
+      });
+
+      return {
+        message: 'Return request submitted successfully. The seller has been notified.',
+        subOrderNumber: updatedSubOrder.subOrderNumber,
+        status: updatedSubOrder.status,
+      };
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -469,6 +772,39 @@ export class OrdersService {
         },
       });
 
+      // Stock lifecycle transitions:
+      const subOrderItems = await tx.orderItem.findMany({
+        where: { sellerOrderId: currentSubOrder.id },
+      });
+
+      if (targetStatus === SellerOrderStatus.CANCELLED) {
+        await this.restoreInventoryForOrderItems(
+          tx,
+          subOrderItems,
+          userId,
+          dto.notes || 'Seller cancelled sub-order',
+          currentSubOrder.subOrderNumber,
+        );
+      } else if (targetStatus === SellerOrderStatus.DELIVERED) {
+        await this.fulfillInventoryForOrderItems(
+          tx,
+          subOrderItems,
+          userId,
+          currentSubOrder.subOrderNumber,
+        );
+      } else if (
+        currentStatus === SellerOrderStatus.RETURN_REQUESTED &&
+        targetStatus === SellerOrderStatus.RETURNED
+      ) {
+        await this.returnRestockInventoryForOrderItems(
+          tx,
+          subOrderItems,
+          userId,
+          currentSubOrder.subOrderNumber,
+          dto.notes || 'Seller approved return and restocked inventory',
+        );
+      }
+
       // 6. Record OrderStatusHistory
       await tx.orderStatusHistory.create({
         data: {
@@ -490,6 +826,9 @@ export class OrdersService {
   }
 
   private async getSellerShop(userId: string) {
+    if (!userId) {
+      throw new ForbiddenException('Seller authentication required');
+    }
     const shop = await this.prisma.shop.findUnique({
       where: { sellerId: userId },
     });
@@ -965,6 +1304,17 @@ export class OrdersService {
             so.status !== SellerOrderStatus.CANCELLED &&
             so.status !== SellerOrderStatus.RETURNED
           ) {
+            const soItems = await tx.orderItem.findMany({
+              where: { sellerOrderId: so.id },
+            });
+            await this.restoreInventoryForOrderItems(
+              tx,
+              soItems,
+              adminUserId,
+              dto.notes || 'Parent order cancelled by administrator',
+              so.subOrderNumber,
+            );
+
             await tx.sellerOrder.update({
               where: { id: so.id },
               data: {
@@ -1080,6 +1430,39 @@ export class OrdersService {
             : {}),
         },
       });
+
+      // Admin sub-order stock transitions
+      const adminSubItems = await tx.orderItem.findMany({
+        where: { sellerOrderId: subOrder.id },
+      });
+
+      if (targetStatus === SellerOrderStatus.CANCELLED) {
+        await this.restoreInventoryForOrderItems(
+          tx,
+          adminSubItems,
+          adminUserId,
+          dto.notes || 'Admin cancelled sub-order',
+          subOrder.subOrderNumber,
+        );
+      } else if (targetStatus === SellerOrderStatus.DELIVERED) {
+        await this.fulfillInventoryForOrderItems(
+          tx,
+          adminSubItems,
+          adminUserId,
+          subOrder.subOrderNumber,
+        );
+      } else if (
+        currentStatus === SellerOrderStatus.RETURN_REQUESTED &&
+        targetStatus === SellerOrderStatus.RETURNED
+      ) {
+        await this.returnRestockInventoryForOrderItems(
+          tx,
+          adminSubItems,
+          adminUserId,
+          subOrder.subOrderNumber,
+          dto.notes || 'Admin approved return and restocked inventory',
+        );
+      }
 
       await tx.orderStatusHistory.create({
         data: {

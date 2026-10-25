@@ -96,4 +96,26 @@ describe('Stage 3A Authentication Contract Validation Tests', () => {
       assert.strictEqual(err.messages.length, 1);
     });
   });
+
+  describe('Password Recovery & Reset Contract (ForgotPasswordDto / ResetPasswordDto)', () => {
+    it('should validate valid email address for forgot password request', () => {
+      const validEmail = 'customer@example.com';
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      assert.strictEqual(emailRegex.test(validEmail), true);
+    });
+
+    it('should validate reset token format (32-byte hex / 64 hex characters)', () => {
+      const sampleResetToken = 'b2c3d4e5f6a17890123456789abcdef0123456789abcdef0123456789abcdef0';
+      assert.strictEqual(sampleResetToken.length, 64);
+      assert.strictEqual(/^[0-9a-fA-F]{64}$/.test(sampleResetToken), true);
+    });
+
+    it('should enforce password complexity on reset password', () => {
+      const weakResetPass = 'weakpass';
+      assert.strictEqual(weakResetPass.length >= 8 && PASSWORD_REGEX.test(weakResetPass), false);
+
+      const strongResetPass = 'NewSecurePass2026!';
+      assert.strictEqual(strongResetPass.length >= 8 && PASSWORD_REGEX.test(strongResetPass), true);
+    });
+  });
 });

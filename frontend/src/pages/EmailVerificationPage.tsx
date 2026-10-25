@@ -7,7 +7,7 @@ import './EmailVerificationPage.css';
 
 export function EmailVerificationPage() {
   const { navigate } = useRouter();
-  const { user, authMode, updateUserProfile } = useMarketplace();
+  const { user } = useMarketplace();
 
   const [tokenInput, setTokenInput] = useState('');
   const [devToken, setDevToken] = useState<string | null>(() => {
@@ -33,14 +33,6 @@ export function EmailVerificationPage() {
     const token = tokenInput.trim();
     if (!token) {
       setErrorMsg('Please enter your email verification token.');
-      return;
-    }
-
-    if (authMode === 'DEMO') {
-      // Demo preview mode
-      setIsVerified(true);
-      updateUserProfile({ emailVerified: true });
-      setSuccessMsg('Email verified in Demo Mode.');
       return;
     }
 
@@ -75,11 +67,6 @@ export function EmailVerificationPage() {
       setTokenInput(devToken);
       setErrorMsg('');
     }
-  };
-
-  const handleDemoPreview = () => {
-    setIsVerified(true);
-    updateUserProfile({ emailVerified: true });
   };
 
   const displayEmail = user?.email || 'your registered email';
@@ -171,13 +158,6 @@ export function EmailVerificationPage() {
             </form>
 
             <div className="bb-auth-action-row">
-              <button
-                type="button"
-                className="bb-btn bb-btn-secondary bb-btn-sm bb-btn-block"
-                onClick={handleDemoPreview}
-              >
-                Preview in Demo Mode
-              </button>
               <button
                 type="button"
                 className="bb-btn bb-btn-outline bb-btn-sm bb-btn-block"

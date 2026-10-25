@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { SellerOrderStatus } from '../../generated/prisma/client.js';
 
 export class QueryOrdersDto {
@@ -31,4 +31,23 @@ export class UpdateSellerOrderStatusDto {
   @IsOptional()
   @IsString({ message: 'Notes must be a string' })
   notes?: string;
+}
+
+
+export class CustomerCancelOrderDto {
+  @IsOptional()
+  @IsString({ message: 'Cancellation reason must be a string' })
+  @MaxLength(500, { message: 'Cancellation reason cannot exceed 500 characters' })
+  reason?: string;
+}
+
+export class CustomerReturnOrderDto {
+  @IsNotEmpty({ message: 'Sub-order number is required' })
+  @IsString()
+  subOrderNumber!: string;
+
+  @IsNotEmpty({ message: 'Return reason is required' })
+  @IsString()
+  @MaxLength(500, { message: 'Return reason cannot exceed 500 characters' })
+  reason!: string;
 }

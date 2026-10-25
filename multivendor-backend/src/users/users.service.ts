@@ -9,6 +9,8 @@ import {
   ShopStatus,
   UserRole,
   UserStatus,
+  ProductStatus,
+  OrderStatus,
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
@@ -34,6 +36,15 @@ export class UsersService {
     const where: Prisma.UserWhereInput = {};
     if (query.role) {
       where.role = query.role;
+    }
+    const searchParam = (query as any).search?.trim();
+    if (searchParam) {
+      where.OR = [
+        { email: { contains: searchParam, mode: 'insensitive' } },
+        { firstName: { contains: searchParam, mode: 'insensitive' } },
+        { lastName: { contains: searchParam, mode: 'insensitive' } },
+        { phone: { contains: searchParam, mode: 'insensitive' } },
+      ];
     }
     if (query.status) {
       where.status = query.status;
@@ -118,6 +129,17 @@ export class UsersService {
             sessions: true,
           },
         },
+        orders: {
+          select: {
+            id: true,
+            orderNumber: true,
+            totalAmount: true,
+            status: true,
+            createdAt: true,
+          },
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -138,6 +160,7 @@ export class UsersService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       shop: user.shop,
+      recentOrders: (user as any).orders || [],
       stats: {
         totalOrders: user._count.orders,
         totalAddresses: user._count.addresses,
@@ -329,5 +352,118 @@ export class UsersService {
         user: updatedUser,
       };
     });
+  }
+  /**
+   * 5. GET /api/v1/admin/dashboard/summary
+   * Returns real aggregated metrics directly from PostgreSQL.
+   */
+  async getAdminDashboardSummary() {
+    const [
+      totalCustomers,
+      totalSellers,
+      totalAdmins,
+      totalShops,
+      pendingShops,
+      approvedShops,
+      suspendedShops,
+      totalProducts,
+      publishedProducts,
+      totalOrders,
+      revenueAggregation,
+      recentOrders,
+      pendingShopList,
+    ] = await Promise.all([
+      this.prisma.user.count({ where: { role: UserRole.CUSTOMER } }),
+      this.prisma.user.count({ where: { role: UserRole.SELLER } }),
+      this.prisma.user.count({ where: { role: UserRole.ADMIN } }),
+      this.prisma.shop.count(),
+      this.prisma.shop.count({ where: { status: ShopStatus.PENDING_APPROVAL } }),
+      this.prisma.shop.count({ where: { status: ShopStatus.APPROVED } }),
+      this.prisma.shop.count({ where: { status: ShopStatus.SUSPENDED } }),
+      this.prisma.product.count(),
+      this.prisma.product.count({ where: { status: ProductStatus.PUBLISHED } }),
+      this.prisma.order.count(),
+      // Revenue and paid orders strictly require confirmed payment.
+      // In the BharatBazaar state machine, orders begin in PENDING_PAYMENT.
+      // Fulfillment statuses (CONFIRMED, PROCESSING, PARTIALLY_SHIPPED, SHIPPED, DELIVERED)
+      // can only be entered after verified payment confirmation.
+      this.prisma.order.aggregate({
+        where: {
+          status: {
+            in: [
+              OrderStatus.CONFIRMED,
+              OrderStatus.PROCESSING,
+              OrderStatus.PARTIALLY_SHIPPED,
+              OrderStatus.SHIPPED,
+              OrderStatus.DELIVERED,
+            ],
+          },
+        },
+        _sum: { totalAmount: true },
+        _count: { id: true },
+      }),
+      this.prisma.order.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          orderNumber: true,
+          totalAmount: true,
+          status: true,
+          createdAt: true,
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      this.prisma.shop.findMany({
+        where: { status: ShopStatus.PENDING_APPROVAL },
+        take: 5,
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true,
+          createdAt: true,
+          seller: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const completedRevenue = Number(revenueAggregation._sum.totalAmount ?? 0);
+    const paidOrdersCount = revenueAggregation._count.id;
+
+    return {
+      metrics: {
+        totalCustomers,
+        totalSellers,
+        totalAdmins,
+        totalShops,
+        pendingShops,
+        approvedShops,
+        suspendedShops,
+        totalProducts,
+        publishedProducts,
+        totalOrders,
+        paidOrdersCount,
+        completedRevenue,
+      },
+      recentOrders,
+      pendingShops: pendingShopList,
+    };
   }
 }

@@ -379,26 +379,50 @@ export function CheckoutPage() {
                   <span className="bb-form-hint">Standard Delivery (3-5 days)</span>
                 </div>
 
-                {group.items.map((item) => (
-                  <div key={item.id} className="bb-checkout-item-row">
-                    <img
-                      src={item.product.thumbnail}
-                      alt={item.product.title}
-                      className="bb-checkout-item-thumb"
-                    />
-                    <div className="bb-checkout-item-details">
-                      <div className="bb-checkout-item-title">{item.product.title}</div>
-                      <div className="bb-checkout-item-sub">
-                        Qty: {item.quantity}
-                        {item.selectedVariants &&
-                          Object.entries(item.selectedVariants).map(([k, v]) => ` | ${k}: ${v}`)}
+                {group.items.map((item) => {
+                  const validatedItem = validationResult?.items?.find(
+                    (vi) => vi.variantId === item.variantId
+                  );
+                  const displayPrice = validatedItem ? validatedItem.unitPrice : item.price;
+                  const displayLineTotal = validatedItem ? validatedItem.lineSubtotal : item.price * item.quantity;
+                  const isItemUnavailable = validatedItem ? !validatedItem.isAvailable : item.isAvailable === false;
+
+                  return (
+                    <div key={item.id} className="bb-checkout-item-row">
+                      <img
+                        src={item.product.thumbnail}
+                        alt={item.product.title}
+                        className="bb-checkout-item-thumb"
+                      />
+                      <div className="bb-checkout-item-details">
+                        <div className="bb-checkout-item-title">{item.product.title}</div>
+                        <div className="bb-checkout-item-sub">
+                          Qty: {item.quantity}
+                          {item.selectedVariants &&
+                            Object.entries(item.selectedVariants).map(([k, v]) => ` | ${k}: ${v}`)}
+                        </div>
+                        {isItemUnavailable && (
+                          <div style={{ marginTop: '0.25rem' }}>
+                            <span
+                              className="bb-badge"
+                              style={{ backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.75rem' }}
+                            >
+                              ⚠️ {validatedItem?.rejectionReason || 'Unavailable or Out of Stock'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="bb-checkout-item-price">
+                        ₹{displayLineTotal.toLocaleString('en-IN')}
+                        {displayPrice !== item.price && (
+                          <div style={{ fontSize: '0.7rem', color: '#ea580c' }}>
+                            (Updated from ₹{item.price})
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="bb-checkout-item-price">
-                      ₹{(item.price * item.quantity).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
           </section>

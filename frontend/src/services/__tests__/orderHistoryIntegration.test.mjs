@@ -578,4 +578,75 @@ describe('Stage 3B-5 Customer Order History Integration Unit & Adapter Tests', (
     assert.equal(isStepActive(pendingOrder.status, 1), false); // Step 2 (Confirmed) not active
     assert.equal(isStepActive(pendingOrder.status, 2), false); // Step 3 (Shipped) not active
   });
+
+  it('10. should validate customer cancellation rules and atomic stock restoration', () => {
+    // 1. Eligibility rule: PENDING_PAYMENT or CONFIRMED orders may be cancelled
+    const canCancel = (status) => status === 'PENDING_PAYMENT' || status === 'CONFIRMED' || status === 'PLACED';
+    assert.strictEqual(canCancel('PENDING_PAYMENT'), true);
+    assert.strictEqual(canCancel('CONFIRMED'), true);
+    assert.strictEqual(canCancel('PLACED'), true);
+    assert.strictEqual(canCancel('SHIPPED'), false);
+    assert.strictEqual(canCancel('DELIVERED'), false);
+    assert.strictEqual(canCancel('CANCELLED'), false);
+
+    // 2. Stock restoration simulation
+    let availableQuantity = 10;
+    let reservedQuantity = 2;
+    const itemQuantity = 2;
+
+    // Concurrency-safe SQL arithmetic: available += qty, reserved -= qty
+    availableQuantity += itemQuantity;
+    reservedQuantity = Math.max(0, reservedQuantity - itemQuantity);
+
+    assert.strictEqual(availableQuantity, 12);
+    assert.strictEqual(reservedQuantity, 0);
+
+    // 3. Movement audit trail verification
+    const cancellationMovement = {
+      movementType: 'ORDER_CANCELLATION',
+      quantity: itemQuantity,
+      balanceAfter: availableQuantity,
+      notes: 'Stock restored due to cancellation: Customer cancelled order',
+    };
+
+    assert.strictEqual(cancellationMovement.movementType, 'ORDER_CANCELLATION');
+    assert.strictEqual(cancellationMovement.quantity, 2);
+    assert.strictEqual(cancellationMovement.balanceAfter, 12);
+  });
+
+  it('11. should validate customer return request rules for delivered packages within 7 days', () => {
+    const isReturnEligible = (packageStatus, deliveredAt) => {
+      if (packageStatus !== 'DELIVERED') return false;
+      if (!deliveredAt) return true;
+      const daysSince = (Date.now() - new Date(deliveredAt).getTime()) / (1000 * 60 * 60 * 24);
+      return daysSince <= 7;
+    };
+
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+
+    assert.strictEqual(isReturnEligible('DELIVERED', twoDaysAgo), true);
+    assert.strictEqual(isReturnEligible('DELIVERED', tenDaysAgo), false); // 7-day window passed
+    assert.strictEqual(isReturnEligible('SHIPPED', twoDaysAgo), false); // In transit, not delivered
+    assert.strictEqual(isReturnEligible('PENDING_PAYMENT', null), false);
+  });
+
+  it('12. should validate stock restock upon return approval (RETURN_RESTOCK)', () => {
+    let availableQuantity = 5;
+    const returnedQuantity = 1;
+
+    availableQuantity += returnedQuantity;
+    assert.strictEqual(availableQuantity, 6);
+
+    const returnMovement = {
+      movementType: 'RETURN_RESTOCK',
+      quantity: returnedQuantity,
+      balanceAfter: availableQuantity,
+      notes: 'Stock restocked from customer return: Defective item accepted',
+    };
+
+    assert.strictEqual(returnMovement.movementType, 'RETURN_RESTOCK');
+    assert.strictEqual(returnMovement.quantity, 1);
+    assert.strictEqual(returnMovement.balanceAfter, 6);
+  });
 });

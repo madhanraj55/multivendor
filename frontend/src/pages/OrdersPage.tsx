@@ -118,6 +118,63 @@ export function OrdersPage() {
     }
   };
 
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [returnSubOrderNumber, setReturnSubOrderNumber] = useState<string | null>(null);
+  const [returnReason, setReturnReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleCancelOrder = async (orderNumber: string) => {
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await ordersApi.cancelCustomerOrder(orderNumber, {
+        reason: cancelReason.trim() || undefined,
+      });
+      setActionMessage({ type: 'success', text: res.message || 'Order cancelled successfully.' });
+      setShowCancelModal(false);
+      setCancelReason('');
+      fetchOrders();
+      const detail = await ordersApi.getMyOrderByNumber(orderNumber);
+      recordOrder(mapCustomerOrderDetailToUi(detail));
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to cancel order.',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRequestReturn = async (orderNumber: string) => {
+    if (!returnSubOrderNumber || !returnReason.trim()) {
+      return;
+    }
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await ordersApi.requestCustomerReturn(orderNumber, {
+        subOrderNumber: returnSubOrderNumber,
+        reason: returnReason.trim(),
+      });
+      setActionMessage({ type: 'success', text: res.message || 'Return request submitted successfully.' });
+      setReturnSubOrderNumber(null);
+      setReturnReason('');
+      fetchOrders();
+      const detail = await ordersApi.getMyOrderByNumber(orderNumber);
+      recordOrder(mapCustomerOrderDetailToUi(detail));
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to submit return request.',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: Order['status']) => {
     switch (status) {
       case 'PENDING_PAYMENT':
@@ -235,6 +292,33 @@ export function OrdersPage() {
           <div>{getStatusBadge(selectedOrder.status)}</div>
         </div>
 
+        {actionMessage && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 'var(--space-4)',
+              padding: '0.75rem 1rem',
+              background: actionMessage.type === 'success' ? '#f0fdf4' : '#fffbeb',
+              border: `1px solid ${actionMessage.type === 'success' ? '#bbf7d0' : '#fef3c7'}`,
+              borderRadius: '8px',
+              color: actionMessage.type === 'success' ? '#166534' : '#92400e',
+              fontSize: '0.875rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <span>{actionMessage.type === 'success' ? '✓ ' : '⚠️ '} {actionMessage.text}</span>
+            <button
+              type="button"
+              className="bb-btn bb-btn-ghost bb-btn-xs"
+              onClick={() => setActionMessage(null)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Tracking Header Card */}
         <div className="bb-order-detail-header-card">
           <div className="bb-order-meta-group">
@@ -307,9 +391,25 @@ export function OrdersPage() {
                     {pkg.packageStatus === 'PENDING_PAYMENT' ? (
                       <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>
                     ) : (
-                      <span className="bb-badge bb-badge-neutral">
-                        Waybill: {pkg.trackingNumber}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className="bb-badge bb-badge-neutral">
+                          Waybill: {pkg.trackingNumber}
+                        </span>
+                        {pkg.packageStatus === 'DELIVERED' && (
+                          <button
+                            type="button"
+                            className="bb-btn bb-btn-outline bb-btn-sm"
+                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                            onClick={() => {
+                              setReturnSubOrderNumber(pkg.trackingNumber);
+                              setReturnReason('');
+                              setActionMessage(null);
+                            }}
+                          >
+                            ↩ Request Return
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -396,10 +496,143 @@ export function OrdersPage() {
                 >
                   📄 Download Tax Invoice (PDF)
                 </button>
+                {Boolean(
+                  selectedOrder.status === 'PENDING_PAYMENT' ||
+                  selectedOrder.status === 'CONFIRMED' ||
+                  selectedOrder.status === 'PLACED'
+                ) && (
+                  <button
+                    type="button"
+                    className="bb-btn bb-btn-outline bb-btn-sm bb-btn-block"
+                    style={{
+                      color: '#dc2626',
+                      borderColor: '#fca5a5',
+                      marginTop: '0.5rem',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      setShowCancelModal(true);
+                      setCancelReason('');
+                      setActionMessage(null);
+                    }}
+                  >
+                    ✕ Cancel Entire Order
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Cancel Order Modal */}
+        {showCancelModal && (
+          <div className="bb-modal-backdrop" onClick={() => !actionLoading && setShowCancelModal(false)}>
+            <div className="bb-modal-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="bb-modal-header">
+                <h3 className="bb-modal-title">Cancel Order #{selectedOrder.orderNumber}</h3>
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-ghost bb-btn-xs"
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={actionLoading}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="bb-modal-body">
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-slate-600)', marginBottom: '1rem' }}>
+                  Are you sure you want to cancel this order? All packages in this order will be cancelled,
+                  and any reserved inventory will be automatically restored for other shoppers.
+                </p>
+                <label className="bb-label" style={{ fontSize: '0.8125rem' }}>
+                  Reason for Cancellation (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  className="bb-input"
+                  placeholder="e.g. Changed my mind, found better price elsewhere, ordered by mistake"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  disabled={actionLoading}
+                />
+              </div>
+              <div className="bb-modal-footer">
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-ghost bb-btn-sm"
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={actionLoading}
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-primary bb-btn-sm"
+                  style={{ backgroundColor: '#dc2626', borderColor: '#dc2626' }}
+                  onClick={() => handleCancelOrder(selectedOrder.orderNumber)}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Cancelling...' : 'Confirm Cancellation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Return Request Modal */}
+        {returnSubOrderNumber && (
+          <div className="bb-modal-backdrop" onClick={() => !actionLoading && setReturnSubOrderNumber(null)}>
+            <div className="bb-modal-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="bb-modal-header">
+                <h3 className="bb-modal-title">Request Return — Package {returnSubOrderNumber}</h3>
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-ghost bb-btn-xs"
+                  onClick={() => setReturnSubOrderNumber(null)}
+                  disabled={actionLoading}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="bb-modal-body">
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-slate-600)', marginBottom: '1rem' }}>
+                  You can request a return for items delivered within the last 7 days.
+                  The merchant will review your request and arrange pickup or return instructions.
+                </p>
+                <label className="bb-label bb-label-required" style={{ fontSize: '0.8125rem' }}>
+                  Reason for Return
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  className="bb-input"
+                  placeholder="e.g. Item damaged upon arrival, incorrect specifications, defective product"
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  disabled={actionLoading}
+                />
+              </div>
+              <div className="bb-modal-footer">
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-ghost bb-btn-sm"
+                  onClick={() => setReturnSubOrderNumber(null)}
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bb-btn bb-btn-primary bb-btn-sm"
+                  onClick={() => handleRequestReturn(selectedOrder.orderNumber)}
+                  disabled={actionLoading || !returnReason.trim()}
+                >
+                  {actionLoading ? 'Submitting...' : 'Submit Return Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

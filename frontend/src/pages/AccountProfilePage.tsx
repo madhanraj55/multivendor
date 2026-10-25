@@ -159,7 +159,7 @@ export function AccountProfilePage() {
               onClick={handleLogout}
             >
               <span className="bb-account-nav-icon">🚪</span>
-              {isLoggingOut ? 'Signing Out...' : `Sign Out (${authMode === 'AUTHENTICATED' ? 'Live' : 'Demo'})`}
+              {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
             </button>
           </nav>
         </aside>
@@ -169,12 +169,12 @@ export function AccountProfilePage() {
           <div className="bb-panel-header">
             <h2 className="bb-panel-title">Personal Profile Details</h2>
             <span
-              className={`bb-badge ${authMode === 'AUTHENTICATED' ? 'bb-badge-success' : 'bb-badge-primary'
+              className={`bb-badge ${authMode === 'AUTHENTICATED' ? 'bb-badge-success' : 'bb-badge-neutral'
                 }`}
             >
               {authMode === 'AUTHENTICATED'
-                ? `Live Account (${authUser?.role || 'CUSTOMER'})`
-                : 'Demo Session'}
+                ? `Active Account (${authUser?.role || 'CUSTOMER'})`
+                : 'Guest Session'}
             </span>
           </div>
 

@@ -228,6 +228,20 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+  devResetToken?: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  newPassword: string;
+}
+
 export interface BackendAddress {
   id: string;
   userId: string;
@@ -650,6 +664,15 @@ export interface CustomerOrderDetailResponse {
   updatedAt: string;
   statusHistory?: Array<Record<string, unknown>>;
   sellerOrders: CustomerOrderDetailSellerOrder[];
+}
+
+export interface CustomerCancelOrderPayload {
+  reason?: string;
+}
+
+export interface CustomerReturnOrderPayload {
+  subOrderNumber: string;
+  reason: string;
 }
 
 // ---------------------------------------------------------------------------

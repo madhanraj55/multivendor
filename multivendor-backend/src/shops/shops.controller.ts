@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
-import { Roles } from '../auth/decorators/roles.decorator.js';
+import { Public, Roles } from '../auth/decorators/roles.decorator.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { UserRole } from '../generated/prisma/client.js';
@@ -31,6 +31,13 @@ export class ShopsController {
   // ---------------------------------------------------------------------------
   // TASK 1: SELLER SHOP APIS
   // ---------------------------------------------------------------------------
+
+    // Public shops endpoint for marketplace discovery and vendor filter
+  @Public()
+  @Get('shops')
+  async getPublicApprovedShops() {
+    return this.shopsService.getPublicApprovedShops();
+  }
 
   @Roles(UserRole.SELLER)
   @Get('seller/shop')

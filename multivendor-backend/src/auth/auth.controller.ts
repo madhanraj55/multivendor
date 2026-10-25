@@ -15,7 +15,7 @@ import { Public } from './decorators/roles.decorator.js';
 import { LoginDto } from './dto/login.dto.js';
 import { ChangePasswordDto, UpdateProfileDto } from './dto/profile.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
-import { RefreshTokenDto, VerifyEmailDto } from './dto/token.dto.js';
+import { ForgotPasswordDto, RefreshTokenDto, ResetPasswordDto, VerifyEmailDto } from './dto/token.dto.js';
 import { AuthGuard } from './guards/auth.guard.js';
 
 @Controller('auth')
@@ -26,6 +26,20 @@ export class AuthController {
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+    @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @Public()
