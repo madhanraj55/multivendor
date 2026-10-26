@@ -100,6 +100,7 @@ describe('AuthService (Unit Tests)', () => {
         email: 'test@example.com',
         firstName: 'Test',
         lastName: 'User',
+        phone: '9876543210',
         role: UserRole.CUSTOMER,
         status: UserStatus.PENDING_VERIFICATION,
         isEmailVerified: false,
@@ -113,10 +114,12 @@ describe('AuthService (Unit Tests)', () => {
         password: 'Password123!',
         firstName: 'Test',
         lastName: 'User',
+        phone: '9876543210',
       });
 
       expect(result.message).toContain('Registration successful');
       expect(result.user.email).toBe('test@example.com');
+      expect(result.user.phone).toBe('9876543210');
       expect(result.devOtp).toBeDefined();
       expect(result.devOtp).toMatch(/^\d{6}$/);
 
@@ -141,6 +144,18 @@ describe('AuthService (Unit Tests)', () => {
       );
     });
 
+    it('should throw BadRequestException if mobile number is missing', async () => {
+      await expect(
+        service.register({
+          email: 'test@example.com',
+          password: 'Password123!',
+          firstName: 'Test',
+          lastName: 'User',
+          phone: '',
+        } as any),
+      ).rejects.toThrow('Mobile number is required');
+    });
+
     it('should throw ConflictException if email is already registered', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce({
         id: 'usr-dup',
@@ -153,6 +168,7 @@ describe('AuthService (Unit Tests)', () => {
           password: 'Password123!',
           firstName: 'Duplicate',
           lastName: 'User',
+          phone: '9876543210',
         }),
       ).rejects.toThrow(ConflictException);
 

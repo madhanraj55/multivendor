@@ -60,6 +60,9 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const normalizedEmail = dto.email.toLowerCase().trim();
+    if (!dto.phone || !dto.phone.trim()) {
+      throw new BadRequestException('Mobile number is required');
+    }
     const normalizedPhone = dto.phone.trim();
     const existingUser = await this.prisma.user.findFirst({
       where: {
