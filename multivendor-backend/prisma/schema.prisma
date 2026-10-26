@@ -71,6 +71,7 @@ model User {
   sessions          UserSession[]
   emailTokens       EmailVerificationToken[]
   passwordTokens    PasswordResetToken[]
+  emailOtps         EmailOtp[]
   addresses         Address[]
   shop              Shop?
   approvedShops     Shop[]       @relation("AdminApprovedShops")
@@ -111,6 +112,27 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@index([tokenHash])
+}
+
+model EmailOtp {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String?   @db.Uuid
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String
+  otpHash        String
+  expiresAt      DateTime
+  failedAttempts Int       @default(0)
+  maxAttempts    Int       @default(5)
+  resendCount    Int       @default(0)
+  lastSentAt     DateTime  @default(now())
+  usedAt         DateTime?
+  ipAddress      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([email])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {

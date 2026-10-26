@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import './AccountProfilePage.css';
@@ -7,15 +7,22 @@ export function AccountProfilePage() {
   const { user, authMode, authUser, updateUserProfile, logout } = useMarketplace();
   const { navigate } = useRouter();
 
-  const [fullName, setFullName] = useState(user?.fullName || 'Ananya Sharma');
-  const [email, setEmail] = useState(user?.email || 'ananya.sharma@example.in');
-  const [phone, setPhone] = useState(user?.phone || '+91 98765 43210');
-  const [gender, setGender] = useState(user?.gender || 'Female');
-  const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '1995-08-14');
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [isSavedToast, setIsSavedToast] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Synchronize component form state with updated user context
+  useEffect(() => {
+    if (user) {
+      setFullName(user.fullName || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
+    }
+  }, [user]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -26,8 +33,6 @@ export function AccountProfilePage() {
         fullName,
         email,
         phone,
-        gender,
-        dateOfBirth,
       });
       setIsSavedToast(true);
       setTimeout(() => setIsSavedToast(false), 3000);
@@ -52,11 +57,14 @@ export function AccountProfilePage() {
   const initials = fullName
     ? fullName
       .split(' ')
+      .filter(Boolean)
       .map((n) => n[0])
       .join('')
       .slice(0, 2)
       .toUpperCase()
     : 'U';
+
+  const isPhoneLocked = authMode === 'AUTHENTICATED' && Boolean(user?.phone);
 
   return (
     <div className="bb-container bb-account-container">
@@ -146,14 +154,6 @@ export function AccountProfilePage() {
             </button>
             <button
               type="button"
-              className="bb-account-nav-item"
-              onClick={() => navigate('/verify-email')}
-            >
-              <span className="bb-account-nav-icon">🛡️</span>
-              Email Verification
-            </button>
-            <button
-              type="button"
               disabled={isLoggingOut}
               className="bb-account-nav-item bb-account-logout-btn"
               onClick={handleLogout}
@@ -167,7 +167,7 @@ export function AccountProfilePage() {
         {/* Main Profile Form Panel */}
         <main className="bb-account-panel">
           <div className="bb-panel-header">
-            <h2 className="bb-panel-title">Personal Profile Details</h2>
+            <h2 className="bb-panel-title">Profile</h2>
             <span
               className={`bb-badge ${authMode === 'AUTHENTICATED' ? 'bb-badge-success' : 'bb-badge-neutral'
                 }`}
@@ -251,31 +251,13 @@ export function AccountProfilePage() {
                   type="tel"
                   className="bb-input"
                   value={phone}
+                  disabled={isPhoneLocked}
+                  placeholder="10-digit Indian mobile number"
                   onChange={(e) => setPhone(e.target.value)}
                 />
-              </div>
-
-              <div className="bb-form-group">
-                <label className="bb-label">Gender</label>
-                <select
-                  className="bb-select"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                >
-                  <option value="Female">Female</option>
-                  <option value="Male">Male</option>
-                  <option value="Other">Other / Prefer not to say</option>
-                </select>
-              </div>
-
-              <div className="bb-form-group">
-                <label className="bb-label">Date of Birth</label>
-                <input
-                  type="date"
-                  className="bb-input"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                />
+                {isPhoneLocked && (
+                  <p className="bb-input-hint">Mobile number cannot be modified once registered.</p>
+                )}
               </div>
             </div>
 
@@ -294,8 +276,6 @@ export function AccountProfilePage() {
                   setFullName(user?.fullName || '');
                   setEmail(user?.email || '');
                   setPhone(user?.phone || '');
-                  setGender(user?.gender || 'Female');
-                  setDateOfBirth(user?.dateOfBirth || '');
                   setProfileError(null);
                 }}
               >

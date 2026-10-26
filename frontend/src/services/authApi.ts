@@ -5,6 +5,10 @@ import type {
   LoginPayload,
   AuthTokenResponse,
   VerifyEmailPayload,
+  SendOtpPayload,
+  VerifyOtpPayload,
+  ResendOtpPayload,
+  OtpResponse,
   RefreshTokenPayload,
   AuthUser,
   UpdateProfilePayload,
@@ -31,7 +35,50 @@ export const authApi = {
    * POST /api/v1/auth/verify-email
    * Verifies account using the 32-byte hex token.
    */
+  /**
+   * POST /api/v1/auth/otp/send
+   * Requests a 6-digit email OTP via Brevo.
+   */
+  async sendOtp(payload: SendOtpPayload): Promise<OtpResponse> {
+    return apiClient.request<OtpResponse>('/auth/otp/send', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuth: true,
+    });
+  },
+
+  /**
+   * POST /api/v1/auth/otp/verify
+   * Verifies account using the 6-digit code.
+   */
+  async verifyOtp(payload: VerifyOtpPayload): Promise<{ message: string }> {
+    return apiClient.request<{ message: string }>('/auth/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuth: true,
+    });
+  },
+
+  /**
+   * POST /api/v1/auth/otp/resend
+   * Resends verification OTP respecting cooldown and rate limits.
+   */
+  async resendOtp(payload: ResendOtpPayload): Promise<OtpResponse> {
+    return apiClient.request<OtpResponse>('/auth/otp/resend', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuth: true,
+    });
+  },
+
+  /**
+   * POST /api/v1/auth/verify-email
+   * Verifies account using token or OTP.
+   */
   async verifyEmail(payload: VerifyEmailPayload): Promise<{ message: string }> {
+    if (payload.otp && payload.email) {
+      return this.verifyOtp({ email: payload.email, otp: payload.otp });
+    }
     return apiClient.request<{ message: string }>('/auth/verify-email', {
       method: 'POST',
       body: JSON.stringify(payload),

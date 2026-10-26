@@ -10,6 +10,108 @@ import './SellerProductsPage.css';
 
 type StatusFilterTab = 'ALL' | ProductStatus;
 
+interface SampleProductTemplate {
+  id: string;
+  name: string;
+  title: string;
+  brand: string;
+  categoryKeywords: string[];
+  description: string;
+  skuPrefix: string;
+  variantTitle: string;
+  mrp: string;
+  price: string;
+  initialStock: string;
+  imageUrl: string;
+}
+
+const SAMPLE_PRODUCT_TEMPLATES: SampleProductTemplate[] = [
+  {
+    id: 'kashmiri-shawl',
+    name: '🧣 Handcrafted Kashmiri Pashmina Shawl',
+    title: 'Handcrafted Kashmiri Pashmina Shawl',
+    brand: 'Royal Heritage',
+    categoryKeywords: ['fashion', 'apparel', 'clothing', 'handicraft', 'textile', 'shawl'],
+    description: 'Authentic 100% pure Cashmere wool shawl, handwoven by master artisans of Srinagar. Features intricate Sozni needlework embroidery and ultra-soft, warm natural texture.',
+    skuPrefix: 'KASH-SHAWL',
+    variantTitle: 'Standard / Free Size',
+    mrp: '2999',
+    price: '2499',
+    initialStock: '15',
+    imageUrl: 'https://images.unsplash.com/photo-1607522370275-f14206abe5d3?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'wireless-earbuds',
+    name: '🎧 Wireless ANC Bluetooth Earbuds',
+    title: 'SoundWave Pro True Wireless Noise Cancelling Earbuds',
+    brand: 'SoundWave',
+    categoryKeywords: ['electronic', 'gadget', 'audio', 'headphone', 'tech'],
+    description: 'High-performance Bluetooth 5.3 earbuds featuring 32dB active noise cancellation, deep bass dynamic drivers, 40-hour total playback battery life, and IPX5 splash resistance.',
+    skuPrefix: 'EARBUD-PRO',
+    variantTitle: 'Midnight Black',
+    mrp: '2499',
+    price: '1499',
+    initialStock: '25',
+    imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'assam-tea',
+    name: '🍵 Pure Assam CTC Orthodox Black Tea (500g)',
+    title: 'Brahmaputra Reserve Single Origin CTC Black Tea 500g',
+    brand: 'Brahmaputra Valley',
+    categoryKeywords: ['grocer', 'food', 'tea', 'beverage', 'gourmet'],
+    description: 'Premium fresh-harvest golden orthodox CTC black tea leaves from Assam upper estates. Delivers a rich, malty aroma, deep amber liquor, and full-bodied traditional chai flavor.',
+    skuPrefix: 'ASSAM-TEA-500',
+    variantTitle: '500g Pouch',
+    mrp: '599',
+    price: '449',
+    initialStock: '30',
+    imageUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'terracotta-jug',
+    name: '🏺 Handcrafted Terracotta Clay Water Jug (1.5L)',
+    title: 'Natural Terracotta Clay Alkaline Water Carafe 1.5L',
+    brand: 'Mitti Magic',
+    categoryKeywords: ['home', 'living', 'kitchen', 'pottery', 'decor', 'craft'],
+    description: 'Handmade eco-friendly earthen clay pitcher cured with natural herbs. Keeps drinking water naturally chilled and alkaline without electricity or artificial coatings.',
+    skuPrefix: 'MITTI-JUG-15L',
+    variantTitle: 'Natural Clay / 1.5 Litre',
+    mrp: '799',
+    price: '549',
+    initialStock: '20',
+    imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'brass-diya',
+    name: '🪔 Pure Brass Akhand Deep Puja Diya',
+    title: 'Solid Brass Traditional Akhand Oil Diya with Glass Chimney',
+    brand: 'Vedica Arts',
+    categoryKeywords: ['puja', 'spiritual', 'decor', 'home', 'brass', 'handicraft'],
+    description: 'Heavy gauge solid brass oil lamp with heat-resistant borosilicate glass chimney. Burns for up to 24 hours continuously without flame disturbance. Ideal for festive occasions and daily puja.',
+    skuPrefix: 'BRASS-DIYA-MED',
+    variantTitle: 'Medium / 5.5 Inch',
+    mrp: '999',
+    price: '749',
+    initialStock: '18',
+    imageUrl: 'https://images.unsplash.com/photo-1605371924599-2d0365da1ae0?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'coconut-oil',
+    name: '🥥 Organic Cold-Pressed Virgin Coconut Oil (1L)',
+    title: 'Malabar Cold Pressed Wood Churned Virgin Coconut Oil 1000ml',
+    brand: 'Malabar Heritage',
+    categoryKeywords: ['beauty', 'wellness', 'organic', 'health', 'oil', 'food', 'grocer'],
+    description: '100% unrefined, cold-pressed raw coconut oil extracted from fresh Kerala coconuts. Free from sulphur, preservatives, and heat processing. Perfect for dietary cooking and nourishing skin/hair care.',
+    skuPrefix: 'COCO-OIL-1L',
+    variantTitle: '1 Litre Glass Bottle',
+    mrp: '650',
+    price: '499',
+    initialStock: '24',
+    imageUrl: 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=800&q=80',
+  },
+];
+
 export function SellerProductsPage() {
   const { authUser, authMode } = useMarketplace();
   const { navigate } = useRouter();
@@ -50,6 +152,13 @@ export function SellerProductsPage() {
   const [creatingProduct, setCreatingProduct] = useState<boolean>(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+
+  // Quick Sample & Import States
+  const [selectedSampleId, setSelectedSampleId] = useState<string>('');
+  const [sampleImportNotice, setSampleImportNotice] = useState<string | null>(null);
+  const [isJsonImportExpanded, setIsJsonImportExpanded] = useState<boolean>(false);
+  const [jsonInputText, setJsonInputText] = useState<string>('');
+  const [jsonImportError, setJsonImportError] = useState<string | null>(null);
 
   // Edit Product Modal States
   const [editingProduct, setEditingProduct] = useState<SellerProductItem | null>(null);
@@ -448,6 +557,8 @@ export function SellerProductsPage() {
       setNewPrice('');
       setNewInitialStock('10');
       setNewImageUrl('');
+      setSelectedSampleId('');
+      setSampleImportNotice(null);
 
       setTimeout(() => {
         setIsCreateModalOpen(false);
@@ -458,6 +569,120 @@ export function SellerProductsPage() {
       setCreateError(msg);
     } finally {
       setCreatingProduct(false);
+    }
+  };
+
+  // Handle loading a predefined sample product template
+  const handleLoadSampleTemplate = (templateId: string) => {
+    const tmpl = SAMPLE_PRODUCT_TEMPLATES.find((t) => t.id === templateId);
+    if (!tmpl) return;
+
+    setNewTitle(tmpl.title);
+    setNewBrand(tmpl.brand);
+    setNewDescription(tmpl.description);
+
+    // Generate unique SKU with random suffix to avoid DB uniqueness conflicts
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    setNewSku(`${tmpl.skuPrefix}-${randomSuffix}`);
+    setNewVariantTitle(tmpl.variantTitle);
+    setNewMrp(tmpl.mrp);
+    setNewPrice(tmpl.price);
+    setNewInitialStock(tmpl.initialStock);
+    setNewImageUrl(tmpl.imageUrl);
+
+    // Smart category matching against fetched backend categories
+    if (categories.length > 0) {
+      const matched = categories.find((cat) => {
+        const nameLower = (cat.name || '').toLowerCase();
+        const slugLower = (cat.slug || '').toLowerCase();
+        return tmpl.categoryKeywords.some(
+          (k) => nameLower.includes(k) || slugLower.includes(k)
+        );
+      });
+      if (matched) {
+        setNewCategoryId(matched.id);
+      } else if (!newCategoryId) {
+        setNewCategoryId(categories[0].id);
+      }
+    }
+
+    setCreateError(null);
+    setSelectedSampleId(templateId);
+    setSampleImportNotice(`✓ Loaded "${tmpl.title}" template! All fields populated with authentic details.`);
+  };
+
+  // Clear all fields in the create form back to empty
+  const handleClearCreateForm = () => {
+    setNewTitle('');
+    setNewDescription('');
+    setNewBrand('');
+    setNewSku('');
+    setNewVariantTitle('Standard');
+    setNewMrp('');
+    setNewPrice('');
+    setNewInitialStock('10');
+    setNewImageUrl('');
+    setSelectedSampleId('');
+    setSampleImportNotice(null);
+    setCreateError(null);
+  };
+
+  // Import custom product data from pasted JSON
+  const handleImportJson = (jsonString: string) => {
+    try {
+      const data = JSON.parse(jsonString);
+      if (!data || typeof data !== 'object') {
+        throw new Error('Imported data must be a valid JSON object.');
+      }
+
+      if (data.title) setNewTitle(String(data.title));
+      if (data.brand !== undefined) setNewBrand(String(data.brand));
+      if (data.description !== undefined) setNewDescription(String(data.description));
+
+      if (data.sku) {
+        const rawSku = String(data.sku).trim();
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        setNewSku(rawSku.includes('-') ? rawSku : `${rawSku}-${randomSuffix}`);
+      } else if (data.title) {
+        const slug = String(data.title).toUpperCase().replace(/[^A-Z0-9]/g, '-').slice(0, 10);
+        setNewSku(`${slug}-${Math.floor(1000 + Math.random() * 9000)}`);
+      }
+
+      if (data.variantTitle || data.variantName) {
+        setNewVariantTitle(String(data.variantTitle || data.variantName));
+      }
+      if (data.mrp !== undefined) setNewMrp(String(data.mrp));
+      if (data.price !== undefined) setNewPrice(String(data.price));
+      if (data.initialStock !== undefined || data.stock !== undefined) {
+        setNewInitialStock(String(data.initialStock ?? data.stock));
+      }
+      if (data.imageUrl || data.image || data.primaryImage) {
+        setNewImageUrl(String(data.imageUrl || data.image || data.primaryImage));
+      }
+
+      // Check category match
+      if (data.category && categories.length > 0) {
+        const catStr = String(data.category).toLowerCase();
+        const matched = categories.find(
+          (c) =>
+            c.name.toLowerCase().includes(catStr) ||
+            c.id === data.categoryId ||
+            (c.slug && c.slug.toLowerCase().includes(catStr))
+        );
+        if (matched) {
+          setNewCategoryId(matched.id);
+        }
+      } else if (data.categoryId) {
+        setNewCategoryId(String(data.categoryId));
+      }
+
+      setCreateError(null);
+      setSampleImportNotice('✓ Successfully imported product details from JSON!');
+      setIsJsonImportExpanded(false);
+      setJsonImportError(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid JSON format.';
+      setJsonImportError(`Failed to parse JSON: ${msg}`);
     }
   };
 
@@ -654,12 +879,26 @@ export function SellerProductsPage() {
             onClick={() => {
               setCreateError(null);
               setCreateSuccess(null);
+              setSampleImportNotice(null);
               setIsCreateModalOpen(true);
             }}
             style={{ fontWeight: 'bold' }}
             title="Add a new product to catalogue"
           >
             + Add New Product
+          </button>
+          <button
+            type="button"
+            className="bb-btn-import-sample"
+            onClick={() => {
+              setCreateError(null);
+              setCreateSuccess(null);
+              handleLoadSampleTemplate(SAMPLE_PRODUCT_TEMPLATES[0].id);
+              setIsCreateModalOpen(true);
+            }}
+            title="Quickly open and import a sample product template"
+          >
+            ✨ Quick Import Sample
           </button>
           <button
             type="button"
@@ -696,7 +935,7 @@ export function SellerProductsPage() {
         </div>
 
         <div className="bb-seller-metric-card">
-          <div className="bb-seller-metric-icon" style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>
+          <div className="bb-seller-metric-icon bb-seller-metric-icon-published">
             ✓
           </div>
           <div className="bb-seller-metric-info">
@@ -706,7 +945,7 @@ export function SellerProductsPage() {
         </div>
 
         <div className="bb-seller-metric-card">
-          <div className="bb-seller-metric-icon" style={{ backgroundColor: '#fef3c7', color: '#b45309' }}>
+          <div className="bb-seller-metric-icon bb-seller-metric-icon-draft">
             📝
           </div>
           <div className="bb-seller-metric-info">
@@ -716,7 +955,7 @@ export function SellerProductsPage() {
         </div>
 
         <div className="bb-seller-metric-card">
-          <div className="bb-seller-metric-icon" style={{ backgroundColor: '#eff6ff', color: '#1e40af' }}>
+          <div className="bb-seller-metric-icon bb-seller-metric-icon-available">
             📊
           </div>
           <div className="bb-seller-metric-info">
@@ -726,12 +965,12 @@ export function SellerProductsPage() {
         </div>
 
         {metrics.lowStockCount > 0 && (
-          <div className="bb-seller-metric-card" style={{ borderColor: '#fed7aa' }}>
-            <div className="bb-seller-metric-icon" style={{ backgroundColor: '#fff7ed', color: '#c2410c' }}>
+          <div className="bb-seller-metric-card bb-seller-metric-card-lowstock">
+            <div className="bb-seller-metric-icon bb-seller-metric-icon-lowstock">
               ⚠️
             </div>
             <div className="bb-seller-metric-info">
-              <span className="bb-seller-metric-value" style={{ color: '#c2410c' }}>
+              <span className="bb-seller-metric-value bb-seller-metric-value-lowstock">
                 {metrics.lowStockCount}
               </span>
               <span className="bb-seller-metric-label">Low Stock Variants</span>
@@ -818,7 +1057,7 @@ export function SellerProductsPage() {
 
       {/* Main Content States */}
       {loading ? (
-        <div style={{ padding: '60px 0' }}>
+        <div className="bb-loading-padded-container">
           <LoadingSpinner />
         </div>
       ) : error ? (
@@ -905,7 +1144,7 @@ export function SellerProductsPage() {
                       {/* Variants */}
                       <div className="bb-seller-product-metric-group">
                         <span className="bb-seller-product-metric-label">Variants</span>
-                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'bold', color: 'var(--color-slate-800)' }}>
+                        <span className="bb-product-price-primary">
                           {variantCount} {variantCount === 1 ? 'Variant' : 'Variants'}
                         </span>
                       </div>
@@ -1032,14 +1271,14 @@ export function SellerProductsPage() {
                                           </span>
                                         ))
                                       ) : (
-                                        <span style={{ color: 'var(--color-slate-400)' }}>None</span>
+                                        <span className="bb-table-cell-none">None</span>
                                       )}
                                     </div>
                                   </td>
-                                  <td style={{ fontWeight: 'bold' }}>
+                                  <td className="bb-table-cell-bold">
                                     ₹{Number(v.price).toLocaleString('en-IN')}
                                   </td>
-                                  <td style={{ color: 'var(--color-slate-500)' }}>
+                                  <td className="bb-table-cell-muted">
                                     ₹{Number(v.mrp).toLocaleString('en-IN')}
                                   </td>
                                   <td>
@@ -1052,8 +1291,8 @@ export function SellerProductsPage() {
                                       {avail}
                                     </span>
                                   </td>
-                                  <td style={{ color: 'var(--color-slate-500)' }}>{res}</td>
-                                  <td style={{ color: 'var(--color-slate-500)' }}>{thresh}</td>
+                                  <td className="bb-table-cell-muted">{res}</td>
+                                  <td className="bb-table-cell-muted">{thresh}</td>
                                   <td>
                                     <div className="bb-variant-action-btns">
                                       <button
@@ -1175,41 +1414,23 @@ export function SellerProductsPage() {
 
               {/* Existing Product Images */}
               {activeImageUploadProduct.images && activeImageUploadProduct.images.length > 0 && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--color-slate-600)' }}>
+                <div className="bb-existing-images-section">
+                  <h4 className="bb-existing-images-heading">
                     Current Product Images ({activeImageUploadProduct.images.length})
                   </h4>
-                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div className="bb-existing-images-grid">
                     {activeImageUploadProduct.images.map((img) => (
                       <div
                         key={img.id}
-                        style={{
-                          position: 'relative',
-                          width: '100px',
-                          border: '1px solid var(--color-slate-200)',
-                          borderRadius: '8px',
-                          overflow: 'hidden',
-                          background: '#fff',
-                        }}
+                        className="bb-existing-image-card"
                       >
                         <img
                           src={img.url}
                           alt="Product thumbnail"
-                          style={{ width: '100px', height: '80px', objectFit: 'cover', display: 'block' }}
+                          className="bb-existing-image-thumb"
                         />
                         {img.isThumbnail && (
-                          <span
-                            style={{
-                              position: 'absolute',
-                              top: '4px',
-                              left: '4px',
-                              background: '#2563eb',
-                              color: '#fff',
-                              fontSize: '0.65rem',
-                              padding: '1px 4px',
-                              borderRadius: '4px',
-                            }}
-                          >
+                          <span className="bb-existing-image-badge">
                             Thumbnail
                           </span>
                         )}
@@ -1217,15 +1438,7 @@ export function SellerProductsPage() {
                           type="button"
                           onClick={() => handleDeleteExistingImage(activeImageUploadProduct.id, img.id)}
                           disabled={savingImages}
-                          style={{
-                            width: '100%',
-                            padding: '4px',
-                            fontSize: '0.75rem',
-                            color: '#dc2626',
-                            background: '#fef2f2',
-                            border: 'none',
-                            cursor: 'pointer',
-                          }}
+                          className="bb-existing-image-delete-btn"
                         >
                           Delete
                         </button>
@@ -1307,6 +1520,153 @@ export function SellerProductsPage() {
                   </div>
                 )}
 
+                {/* Quick Import / Sample Template Banner */}
+                <div className="bb-sample-import-box">
+                  <div className="bb-sample-import-top">
+                    <div className="bb-sample-import-title-group">
+                      <span className="bb-sample-import-sparkle">✨</span>
+                      <div>
+                        <h4 className="bb-sample-import-heading">Quick Import / Load Sample Product</h4>
+                        <p className="bb-sample-import-desc">
+                          Choose a realistic sample template or paste JSON to populate all product, variant, and pricing fields instantly.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="bb-sample-import-action-buttons">
+                      <button
+                        type="button"
+                        className="bb-btn-sample-json-toggle"
+                        onClick={() => {
+                          setIsJsonImportExpanded((prev) => !prev);
+                          setJsonImportError(null);
+                        }}
+                      >
+                        {isJsonImportExpanded ? '▲ Hide JSON' : '📋 Paste JSON'}
+                      </button>
+                      {(newTitle || newSku || newPrice) && (
+                        <button
+                          type="button"
+                          className="bb-btn-clear-form"
+                          onClick={handleClearCreateForm}
+                          title="Reset all form fields to blank"
+                        >
+                          Clear Form
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dropdown Selector */}
+                  <div className="bb-sample-selector-row">
+                    <select
+                      className="bb-input bb-sample-select"
+                      value={selectedSampleId}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleLoadSampleTemplate(e.target.value);
+                        } else {
+                          setSelectedSampleId('');
+                        }
+                      }}
+                    >
+                      <option value="">⚡ Select a Sample Product Template to Import...</option>
+                      {SAMPLE_PRODUCT_TEMPLATES.map((tmpl) => (
+                        <option key={tmpl.id} value={tmpl.id}>
+                          {tmpl.name} — ₹{tmpl.price} (MRP ₹{tmpl.mrp})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Quick-select chips */}
+                  <div className="bb-sample-chips-row">
+                    <span className="bb-sample-chips-label">Popular Presets:</span>
+                    <div className="bb-sample-chips-list">
+                      {SAMPLE_PRODUCT_TEMPLATES.map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          className={`bb-sample-chip ${selectedSampleId === tmpl.id ? 'active' : ''}`}
+                          onClick={() => handleLoadSampleTemplate(tmpl.id)}
+                          title={`Import ${tmpl.title}`}
+                        >
+                          {tmpl.name.split(' ')[0]} {tmpl.title.split(' ').slice(0, 3).join(' ')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Expandable JSON Import Drawer */}
+                  {isJsonImportExpanded && (
+                    <div className="bb-json-import-panel">
+                      <div className="bb-json-import-header">
+                        <strong>Paste Product Data (JSON)</strong>
+                        <button
+                          type="button"
+                          className="bb-btn-sample-fill"
+                          onClick={() => {
+                            setJsonInputText(JSON.stringify(SAMPLE_PRODUCT_TEMPLATES[0], null, 2));
+                            setJsonImportError(null);
+                          }}
+                        >
+                          Paste Sample JSON
+                        </button>
+                      </div>
+                      <textarea
+                        rows={6}
+                        className="bb-input bb-json-textarea"
+                        placeholder={`{\n  "title": "Handcrafted Kashmiri Pashmina Shawl",\n  "brand": "Royal Heritage",\n  "category": "Fashion",\n  "description": "Authentic Cashmere wool...",\n  "sku": "KASH-SHAWL-01",\n  "mrp": 2999,\n  "price": 2499,\n  "initialStock": 10,\n  "imageUrl": "https://..."\n}`}
+                        value={jsonInputText}
+                        onChange={(e) => {
+                          setJsonInputText(e.target.value);
+                          setJsonImportError(null);
+                        }}
+                      />
+                      {jsonImportError && (
+                        <p className="bb-json-error">⚠️ {jsonImportError}</p>
+                      )}
+                      <div className="bb-json-actions">
+                        <button
+                          type="button"
+                          className="bb-btn bb-btn-primary bb-btn-sm"
+                          onClick={() => handleImportJson(jsonInputText)}
+                          disabled={!jsonInputText.trim()}
+                        >
+                          Apply JSON to Form
+                        </button>
+                        <button
+                          type="button"
+                          className="bb-btn bb-btn-secondary bb-btn-sm"
+                          onClick={() => {
+                            setJsonInputText('');
+                            setIsJsonImportExpanded(false);
+                            setJsonImportError(null);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sample import toast/notice */}
+                  {sampleImportNotice && (
+                    <div className="bb-sample-notice">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>✓</span>
+                        <span>{sampleImportNotice}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="bb-sample-notice-close"
+                        onClick={() => setSampleImportNotice(null)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Basic Info */}
                 <div className="bb-form-group">
                   <label className="bb-label bb-label-required">Product Title</label>
@@ -1365,8 +1725,8 @@ export function SellerProductsPage() {
                 </div>
 
                 {/* Pricing & SKU */}
-                <div style={{ borderTop: '1px solid var(--color-slate-200)', paddingTop: '1rem', marginTop: '1rem' }}>
-                  <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', color: 'var(--color-slate-800)' }}>
+                <div className="bb-form-section-divider">
+                  <h4 className="bb-form-section-heading">
                     Initial Variant & Pricing
                   </h4>
 
@@ -1395,7 +1755,7 @@ export function SellerProductsPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div className="bb-pricing-grid">
                     <div className="bb-form-group">
                       <label className="bb-label bb-label-required">MRP (₹)</label>
                       <input
@@ -1438,7 +1798,7 @@ export function SellerProductsPage() {
                 </div>
 
                 {/* Primary Image URL */}
-                <div style={{ borderTop: '1px solid var(--color-slate-200)', paddingTop: '1rem', marginTop: '1rem' }}>
+                <div className="bb-form-section-divider">
                   <div className="bb-form-group">
                     <label className="bb-label">Primary Image URL</label>
                     <input
@@ -1638,15 +1998,15 @@ export function SellerProductsPage() {
                   </div>
                 )}
 
-                <div style={{ background: 'var(--color-slate-50)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-slate-200)', marginBottom: '0.75rem' }}>
-                  <div style={{ fontWeight: 'bold', color: 'var(--color-slate-900)' }}>
+                <div className="bb-stock-adjust-summary">
+                  <div className="bb-stock-adjust-title">
                     {adjustingVariant.product.title}
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--color-slate-600)', marginTop: '2px' }}>
+                  <div className="bb-stock-adjust-sku">
                     Variant: <strong>{adjustingVariant.variant.title}</strong> (SKU: <code>{adjustingVariant.variant.sku}</code>)
                   </div>
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--color-slate-800)' }}>
-                    Current Available Stock: <strong style={{ color: '#0284c7' }}>{adjustingVariant.variant.inventory?.availableQuantity ?? 0} units</strong>
+                  <div className="bb-stock-adjust-current">
+                    Current Available Stock: <strong className="bb-stock-adjust-highlight">{adjustingVariant.variant.inventory?.availableQuantity ?? 0} units</strong>
                   </div>
                 </div>
 

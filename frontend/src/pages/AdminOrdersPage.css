@@ -3,7 +3,6 @@
    ========================================================================== */
 
 .bb-admin-orders-container {
-  padding-top: var(--space-8);
   padding-bottom: var(--space-12);
 }
 
@@ -20,6 +19,7 @@
   padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
+  display: none;
 }
 
 .bb-admin-header-title-area {

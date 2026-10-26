@@ -16,28 +16,28 @@ export function AdminNav({ activeModule }: AdminNavProps) {
           className={`bb-admin-subnav-btn ${activeModule === 'dashboard' ? 'active' : ''}`}
           onClick={() => navigate('/admin/dashboard')}
         >
-          📊 Dashboard
+         Dashboard
         </button>
         <button
           type="button"
           className={`bb-admin-subnav-btn ${activeModule === 'orders' ? 'active' : ''}`}
           onClick={() => navigate('/admin/orders')}
         >
-          📦 Orders Control
+           Orders
         </button>
         <button
           type="button"
           className={`bb-admin-subnav-btn ${activeModule === 'sellers' ? 'active' : ''}`}
           onClick={() => navigate('/admin/sellers')}
         >
-          🏬 Sellers & Shops
+          Sellers & Shops
         </button>
         <button
           type="button"
           className={`bb-admin-subnav-btn ${activeModule === 'customers' ? 'active' : ''}`}
           onClick={() => navigate('/admin/customers')}
         >
-          👥 Customers & Users
+         Customers
         </button>
       </div>
     </div>

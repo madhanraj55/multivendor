@@ -17,6 +17,8 @@ import { ShopsModule } from './shops/shops.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WishlistModule } from './wishlist/wishlist.module.js';
 
+import { EmailModule } from './email/email.module.js';
+
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
@@ -25,6 +27,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       isGlobal: true,
     }),
     PrismaModule,
+    EmailModule,
     AuthModule,
     AddressesModule,
     CategoriesModule,

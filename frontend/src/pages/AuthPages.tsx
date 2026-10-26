@@ -118,7 +118,12 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
         return;
       }
 
-      if (phone && !INDIAN_PHONE_REGEX.test(phone.trim())) {
+      if (!phone.trim()) {
+        setFormError('Mobile number is required.');
+        return;
+      }
+
+      if (!INDIAN_PHONE_REGEX.test(phone.trim())) {
         setFormError(
           'Phone number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.'
         );
@@ -144,17 +149,21 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
           password,
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          phone: phone.trim() || undefined,
+          phone: phone.trim(),
           role: selectedRole,
         });
 
-        // Store dev verification token if returned
-        if (import.meta.env.DEV && response.devVerificationToken) {
-          try {
-            sessionStorage.setItem('bb_dev_verification_token', response.devVerificationToken);
-          } catch {
-            // quota fallback
+        // Store registered email and dev OTP for seamless verification entry
+        try {
+          sessionStorage.setItem('bb_verify_email', email.trim().toLowerCase());
+          if (import.meta.env.DEV && response.devOtp) {
+            sessionStorage.setItem('bb_dev_otp', response.devOtp);
           }
+          if (import.meta.env.DEV && response.devVerificationToken) {
+            sessionStorage.setItem('bb_dev_verification_token', response.devVerificationToken);
+          }
+        } catch {
+          // quota fallback
         }
 
         setFormSuccess(
@@ -482,16 +491,17 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
               </div>
 
               <div className="bb-form-group">
-                <label className="bb-label">Mobile Number (+91)</label>
+                <label className="bb-label bb-label-required">Mobile Number (+91)</label>
                 <input
                   type="tel"
+                  required
                   maxLength={10}
                   placeholder="10-digit Indian mobile number (e.g. 9876543210)"
                   className="bb-input"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                 />
-                <p className="bb-input-hint">Must start with 6, 7, 8, or 9 if provided.</p>
+                <p className="bb-input-hint">Required. Must be 10 digits starting with 6, 7, 8, or 9.</p>
               </div>
             </>
           )}

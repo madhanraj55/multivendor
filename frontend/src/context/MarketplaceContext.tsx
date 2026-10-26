@@ -97,6 +97,34 @@ interface MarketplaceContextValue {
 
 const MarketplaceContext = createContext<MarketplaceContextValue | null>(null);
 
+// Profile metadata persistence helpers (gender, dateOfBirth)
+function getStoredProfileMeta(userId?: string): { gender: string; dateOfBirth: string } {
+  if (!userId || typeof window === 'undefined') return { gender: '', dateOfBirth: '' };
+  try {
+    const raw = localStorage.getItem(`bb_profile_meta_${userId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+  return { gender: '', dateOfBirth: '' };
+}
+
+function saveStoredProfileMeta(userId: string, meta: { gender?: string; dateOfBirth?: string }) {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    const existing = getStoredProfileMeta(userId);
+    localStorage.setItem(
+      `bb_profile_meta_${userId}`,
+      JSON.stringify({
+        gender: meta.gender !== undefined ? meta.gender : existing.gender,
+        dateOfBirth: meta.dateOfBirth !== undefined ? meta.dateOfBirth : existing.dateOfBirth,
+      }),
+    );
+  } catch {
+    // fallback
+  }
+}
+
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
   // Guest cart in local memory
   const [demoCart, setDemoCart] = useState<CartItem[]>([]);
@@ -157,13 +185,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(() => {
     const existing = sessionManager.getSession();
     if (existing?.user) {
+      const meta = getStoredProfileMeta(existing.user.id);
       return {
         id: existing.user.id,
         fullName: `${existing.user.firstName} ${existing.user.lastName}`.trim(),
         email: existing.user.email,
         phone: existing.user.phone || '',
-        gender: '',
-        dateOfBirth: '',
+        gender: meta.gender || '',
+        dateOfBirth: meta.dateOfBirth || '',
         emailVerified: Boolean(existing.user.isEmailVerified),
       };
     }
@@ -205,15 +234,16 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           }
           return session.user;
         });
-        setUser({
+        const meta = getStoredProfileMeta(session.user.id);
+        setUser((prev) => ({
           id: session.user.id,
           fullName: `${session.user.firstName} ${session.user.lastName}`.trim(),
           email: session.user.email,
           phone: session.user.phone || '',
-          gender: '',
-          dateOfBirth: '',
+          gender: prev?.gender || meta.gender || '',
+          dateOfBirth: prev?.dateOfBirth || meta.dateOfBirth || '',
           emailVerified: Boolean(session.user.isEmailVerified),
-        });
+        }));
       } else {
         setAuthMode((prev) => {
           if (prev === 'AUTHENTICATED') {
@@ -244,6 +274,36 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
+  // Synchronize authenticated user profile and verification status with backend on load
+  useEffect(() => {
+    if (authMode === 'AUTHENTICATED') {
+      authApi.getCurrentUser()
+        .then((freshUser) => {
+          setAuthUser(freshUser);
+          const meta = getStoredProfileMeta(freshUser.id);
+          setUser((prev) => ({
+            id: freshUser.id,
+            fullName: `${freshUser.firstName} ${freshUser.lastName}`.trim(),
+            email: freshUser.email,
+            phone: freshUser.phone || '',
+            gender: prev?.gender || meta.gender || '',
+            dateOfBirth: prev?.dateOfBirth || meta.dateOfBirth || '',
+            emailVerified: Boolean(freshUser.isEmailVerified),
+          }));
+          const cur = sessionManager.getSession();
+          if (cur) {
+            sessionManager.setSession({
+              ...cur,
+              user: freshUser,
+            });
+          }
+        })
+        .catch(() => {
+          // Offline / fallback mode
+        });
+    }
+  }, [authMode]);
+
   const setAuthenticatedSession = (session: AuthSession) => {
     // If switching accounts or logging in freshly, immediately clear previous state
     if (authUser && authUser.id !== session.user.id) {
@@ -266,6 +326,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setOrdersLoading(true);
       ordersRequestIdRef.current++;
     }
+    const meta = getStoredProfileMeta(session.user.id);
     sessionManager.setSession(session);
     setAuthMode('AUTHENTICATED');
     setAuthUser(session.user);
@@ -274,8 +335,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       fullName: `${session.user.firstName} ${session.user.lastName}`.trim(),
       email: session.user.email,
       phone: session.user.phone || '',
-      gender: '',
-      dateOfBirth: '',
+      gender: meta.gender || '',
+      dateOfBirth: meta.dateOfBirth || '',
       emailVerified: Boolean(session.user.isEmailVerified),
     });
   };
@@ -1047,9 +1108,6 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
 
   const updateUserProfile = async (profile: Partial<UserProfile>) => {
-    if (user) {
-      setUser({ ...user, ...profile });
-    }
     if (authMode === 'AUTHENTICATED' && authUser) {
       let firstName = authUser.firstName;
       let lastName = authUser.lastName;
@@ -1065,6 +1123,23 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         phone: phoneDigits || undefined,
       });
       setAuthUser(res.user);
+      if (authUser.id) {
+        saveStoredProfileMeta(authUser.id, {
+          gender: profile.gender,
+          dateOfBirth: profile.dateOfBirth,
+        });
+      }
+      setUser((prev) => ({
+        id: res.user.id,
+        fullName: `${res.user.firstName} ${res.user.lastName}`.trim(),
+        email: res.user.email,
+        phone: res.user.phone || '',
+        gender: profile.gender !== undefined ? profile.gender : (prev?.gender || ''),
+        dateOfBirth: profile.dateOfBirth !== undefined ? profile.dateOfBirth : (prev?.dateOfBirth || ''),
+        emailVerified: Boolean(res.user.isEmailVerified),
+      }));
+    } else if (user) {
+      setUser({ ...user, ...profile });
     }
   };
 

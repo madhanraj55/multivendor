@@ -57,6 +57,15 @@ describe('Stage 3A Authentication Contract Validation Tests', () => {
       assert.strictEqual(INDIAN_PHONE_REGEX.test('7654321098'), true);
       assert.strictEqual(INDIAN_PHONE_REGEX.test('6543210987'), true);
     });
+
+    it('should reject empty, whitespace, or missing mobile numbers (compulsory requirement)', () => {
+      const validatePhone = (val) => Boolean(val && val.trim() && INDIAN_PHONE_REGEX.test(val.trim()));
+      assert.strictEqual(validatePhone(''), false);
+      assert.strictEqual(validatePhone('   '), false);
+      assert.strictEqual(validatePhone(null), false);
+      assert.strictEqual(validatePhone(undefined), false);
+      assert.strictEqual(validatePhone('9876543210'), true);
+    });
   });
 
   describe('Email Verification Token Format Contract', () => {

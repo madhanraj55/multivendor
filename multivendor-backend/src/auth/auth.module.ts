@@ -5,9 +5,12 @@ import { AuthService } from './auth.service.js';
 import { AuthGuard } from './guards/auth.guard.js';
 import { RolesGuard } from './guards/roles.guard.js';
 
+import { EmailModule } from '../email/email.module.js';
+
 @Module({
   imports: [
     JwtModule.register({}),
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthGuard, RolesGuard],

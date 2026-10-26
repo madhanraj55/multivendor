@@ -39,7 +39,6 @@ export function SellerOrdersPage() {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // List Data States
-  const [shopName, setShopName] = useState<string>(authUser?.shop?.name || '');
   const [orders, setOrders] = useState<SellerOrderListItem[]>([]);
   const [meta, setMeta] = useState<{ total: number; page: number; limit: number; totalPages: number }>({
     total: 0,
@@ -92,9 +91,6 @@ export function SellerOrdersPage() {
         if (!isSubscribed || currentSeq !== requestSeqRef.current) return;
         setOrders(response.data);
         setMeta(response.meta);
-        if (response.shop?.name) {
-          setShopName(response.shop.name);
-        }
         setIsMissingShop(false);
         setListError(null);
         setListLoading(false);
@@ -227,22 +223,12 @@ export function SellerOrdersPage() {
       {/* Header Banner */}
       <div className="bb-seller-header">
         <div className="bb-seller-header-title-area">
-          <div className="bb-seller-header-badge-row">
-            <span className="bb-badge bb-badge-primary">🏬 Vendor Merchant Center</span>
-            {shopName && <span className="bb-badge bb-badge-success">{shopName}</span>}
-            <span className="bb-badge bb-badge-neutral">{authUser?.email}</span>
-          </div>
-          <h1 className="bb-seller-header-title">Vendor Order Fulfillment & Dispatch</h1>
-          <p className="bb-seller-header-desc">
-            Manage fulfillment packages assigned specifically to your shop. Prepare confirmed orders, generate packing
-            manifests, dispatch shipments, and track net payout amounts safely.
-          </p>
+          <h1 className="bb-seller-header-title">Customers Orders</h1>
         </div>
         <div className="bb-seller-header-actions">
           <button
             type="button"
-            className="bb-btn bb-btn-outline"
-            style={{ color: 'var(--color-white)', borderColor: 'var(--color-slate-600)' }}
+            className="bb-btn bb-btn-outline bb-btn-seller-header-refresh"
             onClick={handleRefreshFeed}
             disabled={listLoading}
           >
@@ -292,35 +278,6 @@ export function SellerOrdersPage() {
         </div>
       )}
 
-      {/* Controls Bar */}
-      {!isMissingShop && (
-        <div className="bb-seller-filter-bar">
-          <div className="bb-seller-filter-group">
-            <label htmlFor="seller-per-page" style={{ fontSize: 'var(--text-xs)', fontWeight: 'bold' }}>
-              Per Page:
-            </label>
-            <select
-              id="seller-per-page"
-              className="bb-filter-select"
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setPage(1);
-                setListLoading(true);
-              }}
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)' }}>
-            ⚡ Orders placed across multi-vendor checkouts are isolated to your shop items only.
-          </div>
-        </div>
-      )}
-
       {/* Orders Table Container */}
       {listLoading && <LoadingSpinner />}
 
@@ -348,7 +305,7 @@ export function SellerOrdersPage() {
 
       {!listLoading && !listError && !isMissingShop && orders.length > 0 && (
         <div className="bb-seller-table-container">
-          <div style={{ overflowX: 'auto' }}>
+          <div className="bb-seller-table-scroll">
             <table className="bb-seller-table">
               <thead>
                 <tr>
@@ -375,19 +332,19 @@ export function SellerOrdersPage() {
                         >
                           {so.subOrderNumber}
                         </button>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)' }}>
+                        <div className="bb-seller-suborder-parent">
                           Parent: {so.parentOrderNumber}
                         </div>
                       </td>
                       <td>
-                        <div style={{ whiteSpace: 'nowrap' }}>
+                        <div className="bb-seller-order-date">
                           {new Date(so.createdAt).toLocaleDateString('en-IN', {
                             day: 'numeric',
                             month: 'short',
                             year: 'numeric',
                           })}
                         </div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)' }}>
+                        <div className="bb-seller-order-time">
                           {new Date(so.createdAt).toLocaleTimeString('en-IN', {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -395,10 +352,10 @@ export function SellerOrdersPage() {
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-slate-900)' }}>
+                        <div className="bb-seller-item-title">
                           {so.items[0]?.title || 'Package Items'}
                         </div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)' }}>
+                        <div className="bb-seller-item-meta">
                           {so.itemCount} item{so.itemCount > 1 ? 's' : ''} (SKU: {so.items[0]?.sku || 'N/A'})
                           {so.itemCount > 1 ? ` + ${so.itemCount - 1} more` : ''}
                         </div>
@@ -407,10 +364,10 @@ export function SellerOrdersPage() {
                         <span className="bb-badge bb-badge-neutral">{so.deliveryType}</span>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 'var(--font-weight-bold)', color: 'var(--color-emerald-700)' }}>
+                        <div className="bb-seller-net-payable">
                           {formatCurrency(so.netSellerPayable, so.currency)}
                         </div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)' }}>
+                        <div className="bb-seller-total-amount">
                           Total: {formatCurrency(so.totalAmount, so.currency)}
                         </div>
                       </td>
@@ -438,10 +395,10 @@ export function SellerOrdersPage() {
 
           {/* Pagination Bar */}
           <div className="bb-seller-pagination">
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-slate-600)' }}>
+            <div className="bb-seller-pagination-info">
               Showing Page <strong>{meta.page}</strong> of <strong>{meta.totalPages}</strong> ({meta.total} packages)
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <div className="bb-seller-pagination-controls">
               <button
                 type="button"
                 className="bb-btn bb-btn-secondary bb-btn-sm"
@@ -453,6 +410,31 @@ export function SellerOrdersPage() {
               >
                 ← Previous
               </button>
+
+              <div className="bb-seller-per-page-group">
+                <label htmlFor="seller-per-page" className="bb-seller-per-page-label">
+                  Per Page:
+                </label>
+                <select
+                  id="seller-per-page"
+                  className="bb-filter-select"
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(1);
+                    setListLoading(true);
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+
+              <div className="bb-seller-isolation-note">
+                ⚡ Orders placed across multi-vendor checkouts are isolated to your shop items only.
+              </div>
+
               <button
                 type="button"
                 className="bb-btn bb-btn-secondary bb-btn-sm"
@@ -485,7 +467,7 @@ export function SellerOrdersPage() {
             <div className="bb-seller-modal-header">
               <div className="bb-seller-modal-title">
                 <span>📦 Package:</span>
-                <span style={{ fontFamily: 'monospace', color: '#67e8f9' }}>
+                <span className="bb-seller-modal-suborder-num">
                   {selectedSubOrderNumber}
                 </span>
                 {detailOrder && (
@@ -525,10 +507,10 @@ export function SellerOrdersPage() {
                   {/* Unpaid Warning Notice */}
                   {isSellerOrderUnpaid(detailOrder.status) && (
                     <div className="bb-seller-unpaid-banner" role="alert">
-                      <span style={{ fontSize: 'var(--text-xl)', flexShrink: 0 }}>⏳</span>
+                      <span className="bb-seller-unpaid-icon">⏳</span>
                       <div>
                         <strong>Awaiting Payment:</strong>
-                        <p style={{ margin: '4px 0 0 0', color: 'inherit' }}>
+                        <p className="bb-seller-unpaid-text">
                           This sub-order is currently awaiting customer payment confirmation. In accordance with marketplace
                           fulfillment security rules, sellers cannot confirm, process, pack, ship, or deliver orders until
                           payment has been confirmed. Fulfillment actions will unlock automatically upon payment settlement.
@@ -542,34 +524,34 @@ export function SellerOrdersPage() {
                     <h3 className="bb-seller-section-title">💰 Financial & Payout Summary</h3>
                     <div className="bb-seller-grid-2">
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                        <div className="bb-seller-field-label">
                           Parent Order Number
                         </div>
-                        <div style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>
+                        <div className="bb-seller-field-value-mono">
                           {detailOrder.parentOrderNumber}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                        <div className="bb-seller-field-label">
                           Net Seller Payable (Your Payout)
                         </div>
-                        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'bold', color: 'var(--color-emerald-600)' }}>
+                        <div className="bb-seller-field-value-highlight">
                           {formatCurrency(detailOrder.netSellerPayable, detailOrder.currency)}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                        <div className="bb-seller-field-label">
                           Package Subtotal
                         </div>
-                        <div style={{ fontWeight: 'bold' }}>
+                        <div className="bb-seller-field-value">
                           {formatCurrency(detailOrder.subtotalAmount, detailOrder.currency)}
                         </div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                        <div className="bb-seller-field-label">
                           Platform Commission / Shipping
                         </div>
-                        <div style={{ fontWeight: 'bold' }}>
+                        <div className="bb-seller-field-value">
                           {formatCurrency(detailOrder.commissionAmount, detailOrder.currency)} (Commission) + {formatCurrency(detailOrder.shippingFee, detailOrder.currency)} (Ship)
                         </div>
                       </div>
@@ -582,19 +564,19 @@ export function SellerOrdersPage() {
                     {detailOrder.shippingAddress ? (
                       <div className="bb-seller-grid-2">
                         <div>
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                          <div className="bb-seller-field-label">
                             Recipient Name
                           </div>
-                          <div style={{ fontWeight: 'bold' }}>{detailOrder.shippingAddress.fullName}</div>
+                          <div className="bb-seller-field-value">{detailOrder.shippingAddress.fullName}</div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                          <div className="bb-seller-field-label">
                             Delivery Service Type
                           </div>
-                          <div style={{ fontWeight: 'bold' }}>{detailOrder.deliveryType}</div>
+                          <div className="bb-seller-field-value">{detailOrder.deliveryType}</div>
                         </div>
-                        <div style={{ gridColumn: 'span 2' }}>
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', textTransform: 'uppercase' }}>
+                        <div className="bb-seller-address-full">
+                          <div className="bb-seller-field-label">
                             Shipping Address
                           </div>
                           <div>
@@ -607,7 +589,7 @@ export function SellerOrdersPage() {
                         </div>
                       </div>
                     ) : (
-                      <p style={{ color: 'var(--color-slate-500)', fontSize: 'var(--text-sm)', margin: 0 }}>
+                      <p className="bb-seller-empty-note">
                         No physical address snapshot attached to this sub-order.
                       </p>
                     )}
@@ -618,7 +600,7 @@ export function SellerOrdersPage() {
                     <h3 className="bb-seller-section-title">
                       🛍️ Package Items ({detailOrder.items.length})
                     </h3>
-                    <table className="bb-seller-table" style={{ fontSize: 'var(--text-xs)' }}>
+                    <table className="bb-seller-table bb-seller-modal-table">
                       <thead>
                         <tr>
                           <th>Product</th>
@@ -635,18 +617,18 @@ export function SellerOrdersPage() {
                             <td>
                               <strong>{it.productTitle}</strong>
                               {it.attributes && Object.keys(it.attributes).length > 0 && (
-                                <div style={{ color: 'var(--color-slate-500)' }}>
+                                <div className="bb-seller-item-attributes">
                                   {Object.entries(it.attributes)
                                     .map(([k, v]) => `${k}: ${v}`)
                                     .join(', ')}
                                 </div>
                               )}
                             </td>
-                            <td style={{ fontFamily: 'monospace' }}>{it.sku || 'N/A'}</td>
+                            <td className="bb-seller-field-value-mono">{it.sku || 'N/A'}</td>
                             <td>{it.quantity}</td>
                             <td>{formatCurrency(it.unitPrice)}</td>
                             <td>{it.gstRate ? `${it.gstRate}%` : '0%'}</td>
-                            <td style={{ fontWeight: 'bold' }}>{formatCurrency(it.totalAmount)}</td>
+                            <td className="bb-seller-field-value">{formatCurrency(it.totalAmount)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -657,7 +639,7 @@ export function SellerOrdersPage() {
                   <div className="bb-seller-section">
                     <h3 className="bb-seller-section-title">⏱️ Status History & Dispatch Audit</h3>
                     {detailOrder.statusHistory.length > 0 ? (
-                      <ul style={{ paddingLeft: 'var(--space-4)', margin: 0, fontSize: 'var(--text-xs)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <ul className="bb-seller-timeline-list">
                         {detailOrder.statusHistory.map((h, idx) => (
                           <li key={idx}>
                             <span className={`bb-badge ${getSellerStatusBadgeClass(h.status)}`}>
@@ -672,12 +654,12 @@ export function SellerOrdersPage() {
                                 minute: '2-digit',
                               })}
                             </span>
-                            {h.notes && <span style={{ color: 'var(--color-slate-600)' }}> — {h.notes}</span>}
+                            {h.notes && <span className="bb-seller-timeline-notes"> — {h.notes}</span>}
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <p style={{ color: 'var(--color-slate-500)', fontSize: 'var(--text-sm)', margin: 0 }}>
+                      <p className="bb-seller-empty-note">
                         No status transitions recorded yet for this sub-order.
                       </p>
                     )}
@@ -686,44 +668,43 @@ export function SellerOrdersPage() {
                   {/* Status Transition Action Box */}
                   <div className="bb-seller-action-box">
                     <div>
-                      <h4 style={{ margin: '0 0 4px 0', fontSize: 'var(--text-md)', color: 'var(--color-slate-900)' }}>
+                      <h4 className="bb-seller-action-title">
                         📦 Update Package Status
                       </h4>
-                      <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-slate-600)' }}>
+                      <p className="bb-seller-action-desc">
                         Update order status in sequential fulfillment order: Confirm → Processing → Packed → Shipped → Delivered.
                       </p>
                     </div>
 
                     {actionSuccess && (
-                      <div className="bb-badge bb-badge-success" style={{ padding: 'var(--space-3)' }}>
+                      <div className="bb-badge bb-badge-success bb-seller-action-badge">
                         ✓ {actionSuccess}
                       </div>
                     )}
 
                     {actionError && (
-                      <div className="bb-badge bb-badge-danger" style={{ padding: 'var(--space-3)' }}>
+                      <div className="bb-badge bb-badge-danger bb-seller-action-badge">
                         ⚠️ {actionError}
                       </div>
                     )}
 
                     {isSellerOrderUnpaid(detailOrder.status) ? (
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-amber-800)', fontWeight: 'bold' }}>
+                      <div className="bb-seller-action-locked">
                         🔒 Fulfillment actions are locked while awaiting payment.
                       </div>
                     ) : getSellerAllowedTransitions(detailOrder.status).length > 0 ? (
                       <form className="bb-seller-action-form" onSubmit={handleStatusUpdate}>
                         <div className="bb-seller-action-row">
-                          <div style={{ flex: '1 1 200px' }}>
+                          <div className="bb-seller-action-field-status">
                             <label
                               htmlFor="seller-target-status"
-                              style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'bold', marginBottom: '4px' }}
+                              className="bb-seller-action-field-label"
                             >
                               Next Status
                             </label>
                             <select
                               id="seller-target-status"
-                              className="bb-filter-select"
-                              style={{ width: '100%' }}
+                              className="bb-filter-select bb-seller-action-input-full"
                               value={targetStatus}
                               onChange={(e) => setTargetStatus(e.target.value as SellerOrderStatus)}
                               disabled={updatingStatus}
@@ -736,18 +717,17 @@ export function SellerOrdersPage() {
                             </select>
                           </div>
 
-                          <div style={{ flex: '2 1 300px' }}>
+                          <div className="bb-seller-action-field-notes">
                             <label
                               htmlFor="seller-status-notes"
-                              style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'bold', marginBottom: '4px' }}
+                              className="bb-seller-action-field-label"
                             >
                               Fulfillment Notes / Tracking Info
                             </label>
                             <input
                               id="seller-status-notes"
                               type="text"
-                              className="bb-filter-input"
-                              style={{ width: '100%' }}
+                              className="bb-filter-input bb-seller-action-input-full"
                               placeholder="e.g. Items verified and packed; Courier AWB ready"
                               value={statusNotes}
                               onChange={(e) => setStatusNotes(e.target.value)}
@@ -765,7 +745,7 @@ export function SellerOrdersPage() {
                         </div>
                       </form>
                     ) : (
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-slate-500)', fontStyle: 'italic' }}>
+                      <div className="bb-seller-action-none">
                         This package is currently in status <strong>{detailOrder.status}</strong>. No further seller actions
                         are available.
                       </div>

@@ -2,10 +2,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-slate-900, #0f172a);
-  border: 1px solid var(--color-slate-800, #1e293b);
   border-radius: var(--radius-lg, 10px);
   padding: 0.5rem;
+  color: #0f172a;
   margin-bottom: 1.5rem;
 }
 
@@ -17,7 +16,7 @@
 
 .bb-admin-subnav-btn {
   background: transparent;
-  color: var(--color-slate-400, #94a3b8);
+  color: #000000;
   border: 1px solid transparent;
   padding: 0.5rem 1rem;
   border-radius: var(--radius-md, 6px);
@@ -31,12 +30,12 @@
 }
 
 .bb-admin-subnav-btn:hover {
-  color: var(--color-white, #ffffff);
-  background: rgba(255, 255, 255, 0.05);
+  text-decoration: underline;
+  text-underline-offset: 0.3rem;
 }
 
 .bb-admin-subnav-btn.active {
   background: var(--brand-primary, #0284c7);
-  color: var(--color-white, #ffffff);
+  color: var(--color-white, #ff0000);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }

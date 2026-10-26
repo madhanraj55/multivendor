@@ -169,7 +169,11 @@ class ApiClient {
       normalizedEndpoint.startsWith('/auth/login') ||
       normalizedEndpoint.startsWith('/auth/register') ||
       normalizedEndpoint.startsWith('/auth/refresh') ||
-      normalizedEndpoint.startsWith('/auth/verify-email');
+      normalizedEndpoint.startsWith('/auth/verify-email') ||
+      normalizedEndpoint.startsWith('/auth/otp') ||
+      normalizedEndpoint.startsWith('/auth/verify-otp') ||
+      normalizedEndpoint.startsWith('/auth/send-otp') ||
+      normalizedEndpoint.startsWith('/auth/resend-otp');
 
     if (response.status === 401 && !options.skipAuth && !options._retry && !isAuthEndpoint) {
       const refreshedToken = await this.acquireRefreshedAccessToken();

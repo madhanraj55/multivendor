@@ -13,6 +13,7 @@ import { AuthService } from './auth.service.js';
 import { CurrentUser } from './decorators/current-user.decorator.js';
 import { Public } from './decorators/roles.decorator.js';
 import { LoginDto } from './dto/login.dto.js';
+import { ResendOtpDto, SendOtpDto, VerifyOtpDto } from './dto/otp.dto.js';
 import { ChangePasswordDto, UpdateProfileDto } from './dto/profile.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { ForgotPasswordDto, RefreshTokenDto, ResetPasswordDto, VerifyEmailDto } from './dto/token.dto.js';
@@ -28,7 +29,49 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
-    @Public()
+  @Public()
+  @Post('otp/send')
+  @HttpCode(HttpStatus.OK)
+  async sendOtp(@Body() dto: SendOtpDto, @Req() req: any) {
+    return this.authService.sendOtp(dto, req.ip);
+  }
+
+  @Public()
+  @Post('send-otp')
+  @HttpCode(HttpStatus.OK)
+  async sendOtpAlias(@Body() dto: SendOtpDto, @Req() req: any) {
+    return this.authService.sendOtp(dto, req.ip);
+  }
+
+  @Public()
+  @Post('otp/verify')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto);
+  }
+
+  @Public()
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtpAlias(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto);
+  }
+
+  @Public()
+  @Post('otp/resend')
+  @HttpCode(HttpStatus.OK)
+  async resendOtp(@Body() dto: ResendOtpDto, @Req() req: any) {
+    return this.authService.resendOtp(dto, req.ip);
+  }
+
+  @Public()
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  async resendOtpAlias(@Body() dto: ResendOtpDto, @Req() req: any) {
+    return this.authService.resendOtp(dto, req.ip);
+  }
+
+  @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {

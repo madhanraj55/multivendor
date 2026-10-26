@@ -164,6 +164,7 @@
   padding: var(--space-4);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-6);
+  display: none;
 }
 
 .bb-profile-status-info {

@@ -181,7 +181,7 @@ export interface RegisterPayload {
   password: string;
   firstName: string;
   lastName: string;
-  phone?: string;
+  phone: string;
   role?: 'CUSTOMER' | 'SELLER';
 }
 
@@ -196,6 +196,7 @@ export interface RegisterResponse {
     status: UserStatus;
   };
   devVerificationToken?: string;
+  devOtp?: string;
 }
 
 export interface LoginPayload {
@@ -210,7 +211,28 @@ export interface AuthTokenResponse {
 }
 
 export interface VerifyEmailPayload {
-  token: string;
+  token?: string;
+  email?: string;
+  otp?: string;
+}
+
+export interface SendOtpPayload {
+  email: string;
+}
+
+export interface VerifyOtpPayload {
+  email: string;
+  otp: string;
+}
+
+export interface ResendOtpPayload {
+  email: string;
+}
+
+export interface OtpResponse {
+  message: string;
+  cooldownSeconds?: number;
+  devOtp?: string;
 }
 
 export interface RefreshTokenPayload {
