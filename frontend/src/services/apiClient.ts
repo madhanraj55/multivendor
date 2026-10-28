@@ -125,8 +125,22 @@ class ApiClient {
   private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
-    const rawUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:3000/api/v1';
-    this.baseUrl = rawUrl.replace(/\/+$/, '');
+    const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as { env?: Record<string, string | undefined> }).env : undefined;
+    const procEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+    const envUrl = metaEnv?.VITE_API_URL || metaEnv?.VITE_API_BASE_URL || procEnv?.VITE_API_URL || procEnv?.VITE_API_BASE_URL;
+
+    if (envUrl && envUrl.trim()) {
+      let trimmed = envUrl.trim().replace(/\/+$/, '');
+      if (!trimmed.endsWith('/api/v1')) {
+        trimmed = trimmed.endsWith('/api') ? `${trimmed}/v1` : `${trimmed}/api/v1`;
+      }
+      this.baseUrl = trimmed;
+    } else if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      // Remote or mobile browser: route through Vite dev server proxy
+      this.baseUrl = `${window.location.origin}/api/v1`;
+    } else {
+      this.baseUrl = 'http://localhost:3000/api/v1';
+    }
   }
 
   getBaseUrl(): string {

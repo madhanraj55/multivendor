@@ -19,9 +19,31 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api/v1');
+  const rawFrontendUrls = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+  const allowedOrigins = rawFrontendUrls
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const normalized = origin.trim().replace(/\/+$/, '');
+      const isAllowedConfig = allowedOrigins.includes(normalized);
+      const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized);
+      const isCloudflare = /^https:\/\/.*\.trycloudflare\.com$/.test(normalized);
+      const isLan = /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(normalized);
+
+      if (isAllowedConfig || isLocal || isCloudflare || isLan) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -31,6 +53,6 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap();

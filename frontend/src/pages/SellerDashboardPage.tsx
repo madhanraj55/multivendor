@@ -3,6 +3,7 @@ import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import { sellerOrdersApi, getSellerStatusBadgeClass, formatSellerOrderStatusLabel } from '../services/sellerOrdersApi.ts';
 import { sellerProductsApi } from '../services/sellerProductsApi.ts';
+import { apiClient } from '../services/apiClient.ts';
 import type { SellerOrderListItem, SellerProductItem } from '../types/index.ts';
 import { LoadingSpinner, EmptyState, ErrorState } from '../components/common/StateViews.tsx';
 import './SellerDashboardPage.css';
@@ -69,7 +70,7 @@ export function SellerDashboardPage() {
         const primaryError =
           ordersRes.reason instanceof Error
             ? ordersRes.reason.message
-            : 'Could not connect to the backend server (http://localhost:3000). Please ensure your NestJS backend is running.';
+            : `Could not connect to the backend server (${apiClient.getBaseUrl()}). Please ensure your NestJS backend is running.`;
         setError(primaryError);
       }
 
@@ -110,7 +111,7 @@ export function SellerDashboardPage() {
       <div className="bb-container bb-seller-dashboard-container">
         <ErrorState
           title="Backend Server Offline"
-          description={`${error} (Base URL: http://localhost:3000/api/v1). Please ensure your backend service is running and accessible.`}
+          description={`${error} (Base URL: ${apiClient.getBaseUrl()}). Please ensure your backend service is running and accessible.`}
           onRetry={() => window.location.reload()}
         />
       </div>
