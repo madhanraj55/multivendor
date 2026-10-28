@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnauthorizedException,
@@ -50,8 +51,10 @@ export class AuthService {
   private hashOtp(email: string, otp: string): string {
     const secret =
       this.configService.get<string>('JWT_SECRET') ??
-      this.configService.get<string>('JWT_ACCESS_SECRET') ??
-      'bharatbazaar-secure-otp-hmac-salt';
+      this.configService.get<string>('JWT_ACCESS_SECRET');
+    if (!secret) {
+      throw new InternalServerErrorException('JWT secret is not configured in environment variables');
+    }
     return crypto
       .createHmac('sha256', secret)
       .update(`${email.trim().toLowerCase()}:${otp.trim()}`)
@@ -725,9 +728,16 @@ export class AuthService {
       sessionId: session.id,
     };
 
+    const secret =
+      this.configService.get<string>('JWT_SECRET') ??
+      this.configService.get<string>('JWT_ACCESS_SECRET');
+    if (!secret) {
+      throw new InternalServerErrorException('JWT secret is not configured in environment variables');
+    }
+
     const accessToken = await this.jwtService.signAsync(jwtPayload, {
-      secret: this.configService.get<string>('JWT_ACCESS_SECRET') ?? 'default-secret-dev',
-      expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? '15m') as any,
+      secret,
+      expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRATION') ?? this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m') as any,
     });
 
     return {
@@ -755,3 +765,4 @@ export class AuthService {
     };
   }
 }
+

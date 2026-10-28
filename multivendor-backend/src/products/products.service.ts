@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Optional,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -13,6 +14,7 @@ import {
   UserRole,
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PricingService } from '../pricing/pricing.service.js';
 import {
   AdminUpdateProductDto,
   AdminUpdateProductStatusDto,
@@ -29,7 +31,52 @@ import {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly pricing: PricingService;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() pricingService?: PricingService,
+  ) {
+    this.pricing = pricingService ?? new PricingService();
+  }
+
+  private formatPublishedProduct(product: any) {
+    if (!product || !product.variants) return product;
+    return {
+      ...product,
+      variants: product.variants.map((v: any) => {
+        const itemPricing = this.pricing.calculateItemPrice(
+          Number(v.price),
+          v.mrp ? Number(v.mrp) : undefined,
+        );
+        return {
+          ...v,
+          sellerBasePrice: Number(v.price),
+          commissionAmount: itemPricing.commissionAmount,
+          price: itemPricing.customerPrice,
+        };
+      }),
+    };
+  }
+
+  private formatSellerProduct(product: any) {
+    if (!product || !product.variants) return product;
+    return {
+      ...product,
+      variants: product.variants.map((v: any) => {
+        const itemPricing = this.pricing.calculateItemPrice(
+          Number(v.price),
+          v.mrp ? Number(v.mrp) : undefined,
+        );
+        return {
+          ...v,
+          sellerBasePrice: Number(v.price),
+          commissionAmount: itemPricing.commissionAmount,
+          customerPrice: itemPricing.customerPrice,
+        };
+      }),
+    };
+  }
 
   async findPublished(query?: {
     categoryId?: string;
@@ -88,7 +135,7 @@ export class ProductsService {
     ]);
 
     return {
-      items,
+      items: items.map((p) => this.formatPublishedProduct(p)),
       pagination: {
         total,
         page,
@@ -137,7 +184,7 @@ export class ProductsService {
       throw new NotFoundException('Product not found or not currently published');
     }
 
-    return product;
+    return this.formatPublishedProduct(product);
   }
 
   async findPublishedById(id: string) {
@@ -170,13 +217,13 @@ export class ProductsService {
       throw new NotFoundException('Product not found or not currently published');
     }
 
-    return product;
+    return this.formatPublishedProduct(product);
   }
 
   async findSellerProducts(userId: string) {
     const shop = await this.getSellerShop(userId);
 
-    return this.prisma.product.findMany({
+    const products = await this.prisma.product.findMany({
       where: { shopId: shop.id },
       include: {
         category: {
@@ -193,6 +240,7 @@ export class ProductsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return products.map((p) => this.formatSellerProduct(p));
   }
 
   async create(userId: string, dto: CreateProductDto) {

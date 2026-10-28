@@ -1239,10 +1239,13 @@ export class OrdersService {
       }
 
       // Security rule: PENDING_PAYMENT orders cannot be marked as CONFIRMED, PROCESSING, etc.
-      // Payment provider confirmation is required. Admin can only cancel unpaid orders.
+      // Payment provider confirmation is required. Admin can only cancel unpaid orders,
+      // UNLESS the order is Cash on Delivery (COD) where payment is collected upon arrival.
+      const isCodOrder = /\[Payment:\s*COD\]|\[COD\]|Cash on Delivery/i.test(order.notes ?? '');
       if (
         currentStatus === OrderStatus.PENDING_PAYMENT &&
-        targetStatus !== OrderStatus.CANCELLED
+        targetStatus !== OrderStatus.CANCELLED &&
+        !isCodOrder
       ) {
         throw new BadRequestException(
           `Cannot mark order as "${targetStatus}" while in PENDING_PAYMENT. Payment confirmation is required before fulfilling orders. Unpaid orders may only be CANCELLED.`,
@@ -1251,7 +1254,9 @@ export class OrdersService {
 
       // Transition matrix for parent Order
       const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-        [OrderStatus.PENDING_PAYMENT]: [OrderStatus.CANCELLED],
+        [OrderStatus.PENDING_PAYMENT]: isCodOrder
+          ? [OrderStatus.CONFIRMED, OrderStatus.CANCELLED]
+          : [OrderStatus.CANCELLED],
         [OrderStatus.CONFIRMED]: [
           OrderStatus.PROCESSING,
           OrderStatus.CANCELLED,
@@ -1381,9 +1386,11 @@ export class OrdersService {
         );
       }
 
+      const isCodSubOrder = /\[Payment:\s*COD\]|\[COD\]|Cash on Delivery/i.test(subOrder.order?.notes ?? '');
       if (
         currentStatus === SellerOrderStatus.PENDING_PAYMENT &&
-        targetStatus !== SellerOrderStatus.CANCELLED
+        targetStatus !== SellerOrderStatus.CANCELLED &&
+        !isCodSubOrder
       ) {
         throw new BadRequestException(
           `Cannot mark sub-order as "${targetStatus}" while in PENDING_PAYMENT. Payment confirmation is required before fulfilling orders.`,
@@ -1391,7 +1398,9 @@ export class OrdersService {
       }
 
       const allowedTransitions: Record<SellerOrderStatus, SellerOrderStatus[]> = {
-        [SellerOrderStatus.PENDING_PAYMENT]: [SellerOrderStatus.CANCELLED],
+        [SellerOrderStatus.PENDING_PAYMENT]: isCodSubOrder
+          ? [SellerOrderStatus.CONFIRMED, SellerOrderStatus.CANCELLED]
+          : [SellerOrderStatus.CANCELLED],
         [SellerOrderStatus.CONFIRMED]: [
           SellerOrderStatus.PROCESSING,
           SellerOrderStatus.CANCELLED,

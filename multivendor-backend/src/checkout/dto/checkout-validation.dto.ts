@@ -8,6 +8,8 @@ export interface CheckoutItemValidationResult {
   sku: string;
   quantity: number;
   unitPrice: number;
+  sellerBasePrice?: number;
+  commissionAmount?: number;
   mrp: number;
   lineSubtotal: number;
   availableStock: number;
@@ -25,6 +27,7 @@ export interface CheckoutValidationResponse {
   totalItems: number;
   totalQuantity: number;
   subtotalAmount: number;
+  platformFee?: number;
   taxAmount: number | null;
   taxStatus: 'CONFIGURED' | 'UNCONFIGURED';
   items: CheckoutItemValidationResult[];

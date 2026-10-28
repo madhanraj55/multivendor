@@ -26,6 +26,12 @@ describe('OrdersService (Unit Tests)', () => {
       orderStatusHistory: {
         create: jest.fn(),
       },
+      orderItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      inventoryMovement: {
+        create: jest.fn().mockResolvedValue({}),
+      },
       $queryRaw: jest.fn(),
       $transaction: jest.fn(async (cb: any) => await cb(mockPrisma)),
     };
@@ -720,4 +726,5 @@ describe('OrdersService (Unit Tests)', () => {
     });
   });
 });
+
 

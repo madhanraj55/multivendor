@@ -202,7 +202,7 @@ export class ShopsService {
     const limit = query.limit && query.limit > 0 ? query.limit : 20;
     const skip = (page - 1) * limit;
 
-    const statusFilter = query.status;
+    const statusFilter = query.status ?? ShopStatus.PENDING_APPROVAL;
     const search = (query as any).search?.trim();
     const whereClause: any = {};
     if (statusFilter) whereClause.status = statusFilter;
@@ -445,3 +445,4 @@ export class ShopsService {
     });
   }
 }
+

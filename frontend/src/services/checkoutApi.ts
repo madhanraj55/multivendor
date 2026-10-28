@@ -145,6 +145,11 @@ export function mapBackendOrderToUi(backendOrder: BackendOrder): Order {
     isDefault: false,
   };
 
+  const pricingSnapshot = backendOrder.billingAddressSnapshot && typeof backendOrder.billingAddressSnapshot === 'object'
+    ? (backendOrder.billingAddressSnapshot as any).pricingSnapshot
+    : null;
+  const platformFee = pricingSnapshot?.platformFee ?? 3;
+
   const statusMap: Record<string, Order['status']> = {
     PENDING_PAYMENT: 'PENDING_PAYMENT',
     COMPLETED: 'CONFIRMED',
@@ -165,6 +170,7 @@ export function mapBackendOrderToUi(backendOrder: BackendOrder): Order {
     shippingAddress,
     itemsSubtotal: Number(backendOrder.subtotalAmount) || 0,
     estimatedShippingFee: Number(backendOrder.shippingFee) || 0,
+    platformFee,
     discount: Number(backendOrder.discountAmount) || 0,
     totalAmount: Number(backendOrder.totalAmount) || 0,
     paymentMethod: 'Cash on Delivery (COD) / Pay on Arrival',

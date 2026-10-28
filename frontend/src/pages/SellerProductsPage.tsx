@@ -3,6 +3,7 @@ import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import type { SellerProductItem, ProductStatus, BackendCategory } from '../types/index.ts';
 import { sellerProductsApi, validatePriceAgainstMrp } from '../services/sellerProductsApi.ts';
+import { pricingApi, type PricingSettings } from '../services/pricingApi.ts';
 import { categoriesApi } from '../services/categoriesApi.ts';
 import { EmptyState, ErrorState, LoadingSpinner } from '../components/common/StateViews.tsx';
 import { ImageDropzone, type DropzoneImageItem } from '../components/common/ImageDropzone.tsx';
@@ -191,6 +192,20 @@ export function SellerProductsPage() {
   const [variantSku, setVariantSku] = useState<string>('');
   const [variantMrp, setVariantMrp] = useState<string>('');
   const [variantPrice, setVariantPrice] = useState<string>('');
+  const [pricingSettings, setPricingSettings] = useState<PricingSettings | null>(null);
+
+  useEffect(() => {
+    pricingApi.getPublicSettings().then(setPricingSettings).catch(() => {});
+  }, []);
+
+  const commissionRate = pricingSettings?.globalCommissionPercentage ?? 10;
+  const baseNewPrice = parseFloat(newPrice) || 0;
+  const newPriceComm = Math.round((baseNewPrice * (commissionRate / 100) + Number.EPSILON) * 100) / 100;
+  const newPriceCustomer = Math.round((baseNewPrice + newPriceComm + Number.EPSILON) * 100) / 100;
+
+  const baseVarPrice = parseFloat(variantPrice) || 0;
+  const varPriceComm = Math.round((baseVarPrice * (commissionRate / 100) + Number.EPSILON) * 100) / 100;
+  const varPriceCustomer = Math.round((baseVarPrice + varPriceComm + Number.EPSILON) * 100) / 100;
   const [updatingVariant, setUpdatingVariant] = useState<boolean>(false);
   const [variantError, setVariantError] = useState<string | null>(null);
   const [variantSuccess, setVariantSuccess] = useState<string | null>(null);
@@ -1276,7 +1291,10 @@ export function SellerProductsPage() {
                                     </div>
                                   </td>
                                   <td className="bb-table-cell-bold">
-                                    ₹{Number(v.price).toLocaleString('en-IN')}
+                                    <div>₹{Number(v.price).toLocaleString('en-IN')} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>(Payout)</span></div>
+                                    <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: 600 }}>
+                                      ₹{(Number((v as any).customerPrice) || Math.round(Number(v.price) * (1 + commissionRate / 100))).toLocaleString('en-IN')} <span style={{ fontSize: '10px', color: '#0284c7', fontWeight: 400 }}>(Customer)</span>
+                                    </div>
                                   </td>
                                   <td className="bb-table-cell-muted">
                                     ₹{Number(v.mrp).toLocaleString('en-IN')}
@@ -1770,7 +1788,7 @@ export function SellerProductsPage() {
                     </div>
 
                     <div className="bb-form-group">
-                      <label className="bb-label bb-label-required">Selling Price (₹)</label>
+                      <label className="bb-label bb-label-required">Desired Base Selling Price (Your Payout) (₹)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -1780,6 +1798,14 @@ export function SellerProductsPage() {
                         value={newPrice}
                         onChange={(e) => setNewPrice(e.target.value)}
                       />
+                      {baseNewPrice > 0 && (
+                        <div style={{ marginTop: '6px', fontSize: '12px', color: '#0369a1', background: '#f0f9ff', padding: '6px 8px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
+                          💡 <strong>Customer Display Price:</strong> ₹{newPriceCustomer.toLocaleString('en-IN')}
+                          <div style={{ fontSize: '11px', color: '#0284c7' }}>
+                            (Your Payout: ₹{baseNewPrice.toLocaleString('en-IN')} + {commissionRate}% Commission: ₹{newPriceComm.toLocaleString('en-IN')})
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="bb-form-group">
@@ -2148,6 +2174,14 @@ export function SellerProductsPage() {
                       value={variantPrice}
                       onChange={(e) => setVariantPrice(e.target.value)}
                     />
+                    {baseVarPrice > 0 && (
+                      <div style={{ marginTop: '6px', fontSize: '12px', color: '#0369a1', background: '#f0f9ff', padding: '6px 8px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
+                        💡 <strong>Customer Display Price:</strong> ₹{varPriceCustomer.toLocaleString('en-IN')}
+                        <div style={{ fontSize: '11px', color: '#0284c7' }}>
+                          (Your Payout: ₹{baseVarPrice.toLocaleString('en-IN')} + {commissionRate}% Commission: ₹{varPriceComm.toLocaleString('en-IN')})
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <p className="bb-input-hint">

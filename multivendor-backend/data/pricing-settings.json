@@ -1,0 +1,31 @@
+{
+  "globalCommissionPercentage": 10,
+  "platformFee": 3,
+  "deliveryRules": {
+    "tiers": [
+      {
+        "maxKm": 5,
+        "fee": 30
+      },
+      {
+        "maxKm": 25,
+        "fee": 50
+      },
+      {
+        "maxKm": 100,
+        "fee": 80
+      },
+      {
+        "maxKm": 500,
+        "fee": 120
+      },
+      {
+        "maxKm": 999999,
+        "fee": 160
+      }
+    ],
+    "fallbackLocalFee": 40,
+    "fallbackRegionalFee": 70,
+    "fallbackNationalFee": 110
+  }
+}

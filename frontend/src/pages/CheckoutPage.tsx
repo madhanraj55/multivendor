@@ -215,8 +215,10 @@ export function CheckoutPage() {
       ? validationResult.subtotalAmount
       : cartSubtotal;
 
-  const estimatedShipping = authoritativeSubtotal >= 999 ? 0 : 80;
-  const grandTotal = authoritativeSubtotal + estimatedShipping;
+  const packageCount = Object.keys(sellerGroups).length;
+  const platformFee = validationResult?.platformFee ?? 3;
+  const deliveryFee = packageCount * 40;
+  const grandTotal = authoritativeSubtotal + deliveryFee + platformFee;
 
   const handlePlaceOrder = async () => {
     if (isPlacing) return;
@@ -264,7 +266,7 @@ export function CheckoutPage() {
         setRecoveryPendingAttemptId(activeAttempt.id);
 
         // Step 2: Order Placement (POST /api/v1/checkout/place-order)
-        const createdOrder = await placeOrder(orderNotes.trim() || undefined, activeAttempt.id);
+        const createdOrder = await placeOrder(orderNotes.trim() || undefined, activeAttempt.id, paymentMethod);
         
         // Reset recovery record and idempotency key only after verified order success
         clearPendingCheckoutAttempt();
@@ -274,7 +276,7 @@ export function CheckoutPage() {
         navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
       } else {
         // Demo Mode order placement
-        const createdOrder = await placeOrder(orderNotes.trim() || undefined);
+        const createdOrder = await placeOrder(orderNotes.trim() || undefined, undefined, paymentMethod);
         navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
       }
     } catch (err) {
@@ -625,17 +627,22 @@ export function CheckoutPage() {
             )}
 
             <div className="bb-summary-row">
-              <span>Items Subtotal ({cart.reduce((a, b) => a + b.quantity, 0)} items)</span>
+              <span>Product Price ({cart.reduce((a, b) => a + b.quantity, 0)} items)</span>
               <span>₹{authoritativeSubtotal.toLocaleString('en-IN')}</span>
             </div>
 
             <div className="bb-summary-row">
-              <span>Multi-Vendor Shipping Fee (Provisional)</span>
-              <span>{estimatedShipping === 0 ? 'FREE' : `₹${estimatedShipping}`}</span>
+              <span>Distance Delivery Fee ({packageCount} {packageCount === 1 ? 'Package' : 'Packages'})</span>
+              <span>₹{deliveryFee.toLocaleString('en-IN')}</span>
+            </div>
+
+            <div className="bb-summary-row">
+              <span>Platform Fee</span>
+              <span>₹{platformFee.toLocaleString('en-IN')}</span>
             </div>
 
             <div className="bb-delivery-tax-disclaimer">
-              ℹ️ <strong>Authoritative Pricing & Payment Notice:</strong> Prices and line subtotals are verified directly by the server. Online payment integration is scheduled for a future stage; orders are currently placed with <strong>Payment Pending</strong> and will not be dispatched by sellers without verified payment confirmation.
+              ℹ️ <strong>BharatBazaar Pricing Model:</strong> Customer product price = seller base price + admin commission. Distance delivery calculated per seller package. Platform fee (₹{platformFee}) is charged once per order regardless of multi-vendor split.
             </div>
 
             <div className="bb-summary-row total-row">

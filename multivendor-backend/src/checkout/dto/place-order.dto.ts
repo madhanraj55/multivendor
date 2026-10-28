@@ -9,4 +9,8 @@ export class PlaceOrderDto {
   @IsOptional()
   @MaxLength(500, { message: 'Notes cannot exceed 500 characters' })
   notes?: string;
+
+  @IsString({ message: 'Payment method must be a string' })
+  @IsOptional()
+  paymentMethod?: string;
 }

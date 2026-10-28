@@ -613,6 +613,88 @@ describe('CheckoutService (Unit Tests)', () => {
         },
       });
     });
+
+    it('should create order and sub-orders in CONFIRMED status when paymentMethod is COD', async () => {
+      mockPrisma.$queryRaw.mockResolvedValueOnce([
+        {
+          id: 'attempt-uuid-cod',
+          userId: 'user-1',
+          status: CheckoutStatus.STOCK_RESERVED,
+          subtotalAmount: 300,
+          totalAmount: 300,
+          shippingAddressSnapshot: {},
+          billingAddressSnapshot: {},
+          currency: 'INR',
+          expiresAt: new Date(Date.now() + 60000),
+        },
+      ]);
+
+      mockPrisma.checkoutItem.findMany.mockResolvedValueOnce([
+        {
+          id: 'chk-it-1',
+          variantId: 'var-1',
+          quantity: 2,
+          unitPrice: 150,
+          totalPrice: 300,
+          variant: {
+            title: 'T-Shirt',
+            sku: 'TSH-1',
+            attributes: {},
+            product: {
+              title: 'T-Shirt',
+              shop: { id: 'shop-1', name: 'Alpha Shop', status: ShopStatus.APPROVED },
+              category: { id: 'cat-1', defaultGstRate: 5 },
+            },
+            inventory: { id: 'inv-1', availableQuantity: 10, reservedQuantity: 5 },
+          },
+        },
+      ]);
+
+      mockPrisma.order.create.mockResolvedValueOnce({
+        id: 'ord-cod-1',
+        orderNumber: 'ORD-COD-111111',
+        status: OrderStatus.CONFIRMED,
+      });
+
+      mockPrisma.sellerOrder.create.mockResolvedValueOnce({
+        id: 'so-cod-1',
+        subOrderNumber: 'ORD-COD-111111-S1',
+        status: SellerOrderStatus.CONFIRMED,
+      });
+
+      mockPrisma.cart.findUnique.mockResolvedValueOnce({ id: 'cart-1' });
+      mockPrisma.cartItem.deleteMany.mockResolvedValueOnce({ count: 1 });
+
+      mockPrisma.order.findUnique.mockResolvedValueOnce({
+        id: 'ord-cod-1',
+        orderNumber: 'ORD-COD-111111',
+        status: OrderStatus.CONFIRMED,
+        sellerOrders: [{ id: 'so-cod-1', status: SellerOrderStatus.CONFIRMED }],
+      });
+
+      const result = await service.placeOrder('user-1', {
+        checkoutAttemptId: 'attempt-uuid-cod',
+        paymentMethod: 'COD',
+      });
+
+      expect(result.message).toContain('Confirmed via Cash on Delivery');
+      expect(mockPrisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: OrderStatus.CONFIRMED,
+            notes: expect.stringContaining('COD'),
+          }),
+        }),
+      );
+      expect(mockPrisma.sellerOrder.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: SellerOrderStatus.CONFIRMED,
+          }),
+        }),
+      );
+    });
+
   });
 
   describe('getCheckoutAttempt - Read-Only Recovery', () => {

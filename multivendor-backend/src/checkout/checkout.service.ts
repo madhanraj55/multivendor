@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Optional,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -17,11 +18,13 @@ import {
   ShopStatus,
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PricingService } from '../pricing/pricing.service.js';
 import {
   CheckoutItemValidationResult,
   CheckoutValidationResponse,
 } from './dto/checkout-validation.dto.js';
 import { ReserveCheckoutDto } from './dto/reserve-checkout.dto.js';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 interface InventoryRowResult {
   id: string;
@@ -34,10 +37,15 @@ interface InventoryRowResult {
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
 
+  private readonly pricing: PricingService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {}
+    @Optional() pricingService?: PricingService,
+  ) {
+    this.pricing = pricingService ?? new PricingService();
+  }
 
   /**
    * Validates cart contents for the authenticated customer prior to checkout attempt.
@@ -115,11 +123,14 @@ export class CheckoutService {
 
       totalQuantity += item.quantity;
 
-      // Trusted database price
-      const unitPrice = Number(variant.price);
+      // BharatBazaar Pricing Model: Customer Price = Seller Base Price + Commission
+      const sellerBasePrice = Number(variant.price);
       const mrp = Number(variant.mrp);
-      const lineSubtotal = Number((unitPrice * item.quantity).toFixed(2));
-      subtotalAmount = Number((subtotalAmount + lineSubtotal).toFixed(2));
+      const itemPricing = this.pricing.calculateItemPrice(sellerBasePrice, mrp);
+      const unitPrice = itemPricing.customerPrice;
+      const commissionAmount = itemPricing.commissionAmount;
+      const lineSubtotal = this.pricing.round(unitPrice * item.quantity);
+      subtotalAmount = this.pricing.round(subtotalAmount + lineSubtotal);
 
       // GST tax resolution (Product.gstRate -> Category.defaultGstRate -> null)
       const rawGstRate =
@@ -163,6 +174,8 @@ export class CheckoutService {
         variantTitle: variant.title,
         sku: variant.sku,
         quantity: item.quantity,
+        sellerBasePrice,
+        commissionAmount,
         unitPrice,
         mrp,
         lineSubtotal,
@@ -184,6 +197,7 @@ export class CheckoutService {
       totalItems: itemResults.length,
       totalQuantity,
       subtotalAmount,
+      platformFee: this.pricing.getSettings().platformFee,
       taxAmount: anyUnconfiguredTax ? null : 0,
       taxStatus: anyUnconfiguredTax ? 'UNCONFIGURED' : 'CONFIGURED',
       items: itemResults,
@@ -259,7 +273,7 @@ export class CheckoutService {
                 product: {
                   include: {
                     shop: {
-                      select: { id: true, name: true, status: true },
+                      select: { id: true, name: true, status: true, pickupAddress: true },
                     },
                     category: {
                       select: { id: true, defaultGstRate: true },
@@ -318,8 +332,50 @@ export class CheckoutService {
     );
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
-    // Calculate subtotal from trusted variant DB prices
-    let subtotalAmount = 0;
+    // BharatBazaar Multi-Vendor Package & Distance Delivery Calculation
+    const shopGroupMap = new Map<
+      string,
+      {
+        shop: { id: string; name: string; pickupAddress?: any };
+        items: Array<{
+          variantId: string;
+          productTitle: string;
+          sku: string;
+          quantity: number;
+          sellerBasePrice: number;
+          mrp?: number;
+        }>;
+      }
+    >();
+
+    for (const item of sortedCartItems) {
+      const shop = item.variant.product.shop;
+      if (!shopGroupMap.has(shop.id)) {
+        shopGroupMap.set(shop.id, {
+          shop: {
+            id: shop.id,
+            name: shop.name,
+            pickupAddress: (shop as any).pickupAddress ?? null,
+          },
+          items: [],
+        });
+      }
+      shopGroupMap.get(shop.id)!.items.push({
+        variantId: item.variantId,
+        productTitle: item.variant.product.title,
+        sku: item.variant.sku,
+        quantity: item.quantity,
+        sellerBasePrice: Number(item.variant.price),
+        mrp: item.variant.mrp ? Number(item.variant.mrp) : undefined,
+      });
+    }
+
+    const orderPricing = this.pricing.calculateOrderPricing(
+      Array.from(shopGroupMap.values()),
+      dto.shippingAddress,
+    );
+
+    let subtotalAmount = orderPricing.subtotalAmount;
     const checkoutItemsData: Array<{
       variantId: string;
       quantity: number;
@@ -330,20 +386,19 @@ export class CheckoutService {
       variantTitle: string;
     }> = [];
 
-    for (const item of sortedCartItems) {
-      const unitPrice = Number(item.variant.price);
-      const totalPrice = Number((unitPrice * item.quantity).toFixed(2));
-      subtotalAmount = Number((subtotalAmount + totalPrice).toFixed(2));
-
-      checkoutItemsData.push({
-        variantId: item.variantId,
-        quantity: item.quantity,
-        unitPrice,
-        totalPrice,
-        inventoryId: item.variant.inventory!.id,
-        variantSku: item.variant.sku,
-        variantTitle: item.variant.title,
-      });
+    for (const pkg of orderPricing.packages) {
+      for (const it of pkg.items) {
+        const cartItem = sortedCartItems.find((c) => c.variantId === it.variantId)!;
+        checkoutItemsData.push({
+          variantId: it.variantId,
+          quantity: it.quantity,
+          unitPrice: it.customerUnitPrice,
+          totalPrice: it.totalAmount,
+          inventoryId: cartItem.variant.inventory!.id,
+          variantSku: it.sku,
+          variantTitle: it.productTitle,
+        });
+      }
     }
 
     const billingAddress = dto.billingAddress ?? dto.shippingAddress;
@@ -575,6 +630,25 @@ export class CheckoutService {
   }
 
   /**
+   * Automatic background scheduled job:
+   * Scans for and releases expired checkout reservations back to available inventory.
+   * Runs every minute.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleExpiredCheckoutsCleanup() {
+    try {
+      const stats = await this.releaseExpiredCheckouts();
+      if (stats.releasedCount > 0 || stats.failedCount > 0) {
+        this.logger.log(
+          `[Scheduled Cleanup] Processed expired checkouts: ${stats.releasedCount} released, ${stats.failedCount} failed`,
+        );
+      }
+    } catch (err) {
+      this.logger.error('[Scheduled Cleanup] Error running expired checkouts cleanup job', err);
+    }
+  }
+
+  /**
    * Places an order from a verified, unexpired stock-reserved checkout attempt.
    * Concurrency & Atomicity Guarantee:
    * 1. Validates caller ownership: checkoutAttempt.userId === authenticated userId.
@@ -588,7 +662,10 @@ export class CheckoutService {
    * 9. Empties purchased items from the customer's cart.
    * 10. Does NOT mark order as paid or execute payment gateway flows.
    */
-  async placeOrder(userId: string, dto: { checkoutAttemptId: string; notes?: string }) {
+  async placeOrder(
+    userId: string,
+    dto: { checkoutAttemptId: string; notes?: string; paymentMethod?: string },
+  ) {
     return this.prisma.$transaction(
       async (tx) => {
         // 1. Lock the CheckoutAttempt row using FOR UPDATE to prevent race conditions
@@ -747,12 +824,28 @@ export class CheckoutService {
         const randomSuffix = Math.floor(100000 + Math.random() * 900000);
         const orderNumber = `ORD-${datePrefix}-${randomSuffix}`;
 
+        // Cash on Delivery (COD) determination:
+        // COD orders are automatically confirmed upon placement so sellers can immediately fulfill them.
+        // Online payment orders remain in PENDING_PAYMENT to prevent unauthorized fulfillment before payment.
+        const isCod =
+          dto.paymentMethod?.toUpperCase() === 'COD' ||
+          (dto.notes && /\[COD\]|\[Payment:\s*COD\]|Cash on Delivery/i.test(dto.notes));
+
+        const initialOrderStatus = isCod ? OrderStatus.CONFIRMED : OrderStatus.PENDING_PAYMENT;
+        const initialSellerStatus = isCod ? SellerOrderStatus.CONFIRMED : SellerOrderStatus.PENDING_PAYMENT;
+
+        const effectiveNotes = isCod
+          ? (dto.notes
+              ? (dto.notes.includes('[Payment: COD]') ? dto.notes : `[Payment: COD] ${dto.notes}`)
+              : '[Payment: COD]')
+          : (dto.notes ?? null);
+
         // 8. Create Root Order
         const order = await tx.order.create({
           data: {
             orderNumber,
             customerId: userId,
-            status: OrderStatus.PENDING_PAYMENT,
+            status: initialOrderStatus,
             subtotalAmount: attempt.subtotalAmount,
             discountAmount: attempt.discountAmount ?? 0,
             shippingFee: attempt.shippingFee ?? 0,
@@ -761,7 +854,7 @@ export class CheckoutService {
             currency: attempt.currency,
             shippingAddressSnapshot: attempt.shippingAddressSnapshot,
             billingAddressSnapshot: attempt.billingAddressSnapshot,
-            notes: dto.notes ?? null,
+            notes: effectiveNotes,
           },
         });
 
@@ -769,32 +862,50 @@ export class CheckoutService {
         await tx.orderStatusHistory.create({
           data: {
             orderId: order.id,
-            status: OrderStatus.PENDING_PAYMENT,
-            notes: `Order created from checkout attempt ${attempt.id}. Awaiting payment confirmation.`,
+            status: initialOrderStatus,
+            notes: isCod
+              ? `Order created via Cash on Delivery (COD) from checkout attempt ${attempt.id}. Auto-confirmed.`
+              : `Order created from checkout attempt ${attempt.id}. Awaiting payment confirmation.`,
             changedById: userId,
           },
         });
 
-        // 10. Create SellerOrders & OrderItems per shop
+        // 10. Create SellerOrders & OrderItems per shop with BharatBazaar pricing snapshots
+        const pricingSnapshot =
+          attempt.billingAddressSnapshot &&
+          typeof attempt.billingAddressSnapshot === 'object'
+            ? (attempt.billingAddressSnapshot as any).pricingSnapshot
+            : null;
+
         const createdSellerOrders: any[] = [];
         let subOrderIndex = 1;
 
         for (const [shopId, group] of shopGroupMap.entries()) {
           const subOrderNumber = `${orderNumber}-S${subOrderIndex++}`;
 
+          const pkgPricing = pricingSnapshot?.packages?.find(
+            (p: any) => p.shopId === shopId,
+          );
+
+          const packageSubtotal = pkgPricing ? Number(pkgPricing.subtotalAmount) : group.subtotalAmount;
+          const packageShippingFee = pkgPricing ? Number(pkgPricing.deliveryFee) : 0;
+          const packageCommission = pkgPricing ? Number(pkgPricing.commissionAmount) : 0;
+          const packageNetSellerPayable = pkgPricing ? Number(pkgPricing.netSellerPayable) : group.subtotalAmount;
+          const packageTotal = pkgPricing ? Number(pkgPricing.totalAmount) : Number((group.subtotalAmount + packageShippingFee).toFixed(2));
+
           const sellerOrder = await tx.sellerOrder.create({
             data: {
               orderId: order.id,
               shopId,
               subOrderNumber,
-              status: SellerOrderStatus.PENDING_PAYMENT,
-              subtotalAmount: group.subtotalAmount,
+              status: initialSellerStatus,
+              subtotalAmount: packageSubtotal,
               discountAmount: 0,
-              shippingFee: 0,
+              shippingFee: packageShippingFee,
               taxAmount: 0,
-              totalAmount: group.totalAmount,
-              commissionAmount: 0,
-              netSellerPayable: group.totalAmount,
+              totalAmount: packageTotal,
+              commissionAmount: packageCommission,
+              netSellerPayable: packageNetSellerPayable,
               deliveryType: 'SELLER_MANAGED',
               items: {
                 create: group.items.map((item) => {
@@ -804,11 +915,19 @@ export class CheckoutService {
                     null;
                   const gstRate = rawGstRate !== null ? Number(rawGstRate) : null;
 
+                  const pkgItem = pkgPricing?.items?.find(
+                    (pi: any) => pi.variantId === item.variantId,
+                  );
+
                   return {
                     variantId: item.variantId,
                     productTitleSnapshot: item.variant.product.title,
                     skuSnapshot: item.variant.sku,
-                    attributesSnapshot: (item.variant.attributes ?? {}) as any,
+                    attributesSnapshot: {
+                      ...((item.variant.attributes as object) ?? {}),
+                      sellerBasePrice: pkgItem ? pkgItem.sellerBasePrice : Number(item.unitPrice),
+                      commissionAmount: pkgItem ? pkgItem.commissionAmount : 0,
+                    },
                     quantity: item.quantity,
                     unitPriceSnapshot: item.unitPrice,
                     discountSnapshot: 0,
@@ -828,8 +947,10 @@ export class CheckoutService {
           await tx.orderStatusHistory.create({
             data: {
               sellerOrderId: sellerOrder.id,
-              status: SellerOrderStatus.PENDING_PAYMENT,
-              notes: `Sub-order created for shop ${group.shop.name}. Awaiting parent order payment.`,
+              status: initialSellerStatus,
+              notes: isCod
+                ? `Sub-order confirmed automatically for Cash on Delivery (COD) for shop ${group.shop.name}. Ready for fulfillment.`
+                : `Sub-order created for shop ${group.shop.name}. Awaiting parent order payment.`,
               changedById: userId,
             },
           });
@@ -881,7 +1002,7 @@ export class CheckoutService {
         });
 
         return {
-          message: 'Order placed successfully. Awaiting payment.',
+          message: isCod ? 'Order placed successfully. Confirmed via Cash on Delivery.' : 'Order placed successfully. Awaiting payment.',
           isExisting: false,
           order: finalOrder,
         };
@@ -953,3 +1074,4 @@ export class CheckoutService {
     };
   }
 }
+

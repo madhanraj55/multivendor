@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { pricingApi, type PricingSettings } from '../services/pricingApi.ts';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import { EmptyState, ErrorState, SkeletonGrid } from '../components/common/StateViews.tsx';
@@ -24,6 +25,11 @@ export function CartPage() {
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponMessage, setCouponMessage] = useState('');
+  const [pricingSettings, setPricingSettings] = useState<PricingSettings | null>(null);
+
+  useEffect(() => {
+    pricingApi.getPublicSettings().then(setPricingSettings).catch(() => {});
+  }, []);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
 
@@ -42,8 +48,10 @@ export function CartPage() {
     {}
   );
 
-  const estimatedShipping = cart.length > 0 ? (cartSubtotal >= 999 ? 0 : 80) : 0;
-  const grandTotal = Math.max(0, cartSubtotal + estimatedShipping - couponDiscount);
+  const packageCount = Object.keys(sellerGroups).length;
+  const platformFee = cart.length > 0 ? (pricingSettings?.platformFee ?? 3) : 0;
+  const estimatedShipping = cart.length > 0 ? packageCount * (pricingSettings?.deliveryRules?.fallbackLocalFee ?? 40) : 0;
+  const grandTotal = Math.max(0, cartSubtotal + estimatedShipping + platformFee - couponDiscount);
 
   // Check if any cart item is unavailable or out of stock
   const hasUnavailableItems = cart.some(
@@ -317,12 +325,12 @@ export function CartPage() {
 
           <div className="bb-summary-rows">
             <div className="bb-summary-row">
-              <span>Items Total ({cart.length} items)</span>
+              <span>Product Price ({cart.length} items)</span>
               <span>₹{cartSubtotal.toLocaleString('en-IN')}</span>
             </div>
 
             <div className="bb-summary-row">
-              <span>Estimated Delivery Fee</span>
+              <span>Estimated Delivery Fee ({packageCount} {packageCount === 1 ? 'Package' : 'Packages'})</span>
               <span>
                 {estimatedShipping === 0 ? (
                   <span className="bb-summary-discount">FREE</span>
@@ -330,6 +338,11 @@ export function CartPage() {
                   `₹${estimatedShipping}`
                 )}
               </span>
+            </div>
+
+            <div className="bb-summary-row">
+              <span>Platform Fee</span>
+              <span>₹{platformFee}</span>
             </div>
 
             {couponDiscount > 0 && (

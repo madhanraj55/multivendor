@@ -85,7 +85,7 @@ interface MarketplaceContextValue {
   ordersLoading: boolean;
   ordersError: string | null;
   fetchOrders: () => Promise<void>;
-  placeOrder: (notes?: string, checkoutAttemptId?: string) => Promise<Order> | Order;
+  placeOrder: (notes?: string, checkoutAttemptId?: string, paymentMethod?: string) => Promise<Order> | Order;
   recordOrder: (order: Order) => void;
 
   pincode: string;
@@ -1251,13 +1251,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const placeOrder = useCallback(async (notes?: string, checkoutAttemptId?: string): Promise<Order> => {
+  const placeOrder = useCallback(async (notes?: string, checkoutAttemptId?: string, paymentMethod?: string): Promise<Order> => {
     const chosenAddress = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
 
     if (authMode === 'AUTHENTICATED' && checkoutAttemptId) {
       const res = await checkoutApi.placeOrder({
         checkoutAttemptId,
         notes,
+        paymentMethod,
       });
       const uiOrder = mapBackendOrderToUi(res.order);
       recordOrder(uiOrder);

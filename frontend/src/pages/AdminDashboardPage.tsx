@@ -6,6 +6,7 @@ import {
   type AdminDashboardSummaryResponse,
 } from '../services/adminDashboardApi.ts';
 import { AdminNav } from '../components/admin/AdminNav.tsx';
+import { pricingApi, type PricingSettings } from '../services/pricingApi.ts';
 import { EmptyState, LoadingSpinner } from '../components/common/StateViews.tsx';
 import './AdminOrdersPage.css';
 
@@ -16,6 +17,11 @@ export function AdminDashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AdminDashboardSummaryResponse | null>(null);
+  const [_pricingSettings, setPricingSettings] = useState<PricingSettings | null>(null);
+  const [commRate, setCommRate] = useState<string>('10');
+  const [platformFeeInput, setPlatformFeeInput] = useState<string>('3');
+  const [pricingSaving, setPricingSaving] = useState<boolean>(false);
+  const [pricingNotice, setPricingNotice] = useState<string | null>(null);
 
   const fetchSummary = async () => {
     try {
@@ -23,6 +29,14 @@ export function AdminDashboardPage() {
       setError(null);
       const res = await adminDashboardApi.getSummary();
       setData(res);
+      try {
+        const pSettings = await pricingApi.getAdminPricingSettings();
+        setPricingSettings(pSettings);
+        setCommRate(String(pSettings.globalCommissionPercentage));
+        setPlatformFeeInput(String(pSettings.platformFee));
+      } catch (pErr) {
+        console.warn('Failed to load pricing settings:', pErr);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load dashboard overview';
       setError(msg);
@@ -55,6 +69,24 @@ export function AdminDashboardPage() {
       });
     } catch {
       return dateStr;
+    }
+  };
+
+  const handleSavePricing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPricingSaving(true);
+    setPricingNotice(null);
+    try {
+      const updated = await pricingApi.updateAdminPricingSettings({
+        globalCommissionPercentage: parseFloat(commRate) || 0,
+        platformFee: parseFloat(platformFeeInput) || 0,
+      });
+      setPricingSettings(updated);
+      setPricingNotice('✓ BharatBazaar pricing rules saved successfully. Effective immediately for new checkouts.');
+    } catch (err: unknown) {
+      setPricingNotice('Failed to update pricing settings: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setPricingSaving(false);
     }
   };
 
@@ -269,6 +301,120 @@ export function AdminDashboardPage() {
                 </table>
               </div>
             )}
+          </div>
+
+          {/* BharatBazaar Platform Pricing & Delivery Rules Configuration */}
+          <div className="bb-detail-card" style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  ⚙️ BharatBazaar Pricing Model & Commission Controls
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
+                  Configure global seller commission, distance delivery rules, and platform fees. Stored snapshots ensure past orders remain immutable.
+                </p>
+              </div>
+              <span className="bb-badge bb-badge-primary">Admin Control</span>
+            </div>
+
+            {pricingNotice && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  marginBottom: '16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  background: pricingNotice.startsWith('✓') ? '#ecfdf5' : '#fef2f2',
+                  color: pricingNotice.startsWith('✓') ? '#047857' : '#b91c1c',
+                  border: `1px solid ${pricingNotice.startsWith('✓') ? '#a7f3d0' : '#fecaca'}`,
+                }}
+              >
+                {pricingNotice}
+              </div>
+            )}
+
+            <form onSubmit={handleSavePricing}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                <div className="bb-form-group">
+                  <label className="bb-label" style={{ fontWeight: 600, color: '#1e293b' }}>
+                    Global Seller Commission (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    className="bb-input"
+                    value={commRate}
+                    onChange={(e) => setCommRate(e.target.value)}
+                    required
+                  />
+                  <span className="bb-form-hint" style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Added to seller base price: Customer Price = Base + (Base × Commission%)
+                  </span>
+                </div>
+
+                <div className="bb-form-group">
+                  <label className="bb-label" style={{ fontWeight: 600, color: '#1e293b' }}>
+                    Fixed Platform Fee per Order (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="bb-input"
+                    value={platformFeeInput}
+                    onChange={(e) => setPlatformFeeInput(e.target.value)}
+                    required
+                  />
+                  <span className="bb-form-hint" style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Default ₹3. Charged exactly once per order across all vendor packages.
+                  </span>
+                </div>
+              </div>
+
+              {/* Delivery Tiers Overview */}
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 8px', color: '#334155' }}>
+                  🚚 Configured Distance Delivery Tiers (per seller package)
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', fontSize: '12px' }}>
+                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ color: '#64748b' }}>0 - 5 km (Local)</div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹30</div>
+                  </div>
+                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ color: '#64748b' }}>5 - 25 km</div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹50</div>
+                  </div>
+                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ color: '#64748b' }}>25 - 100 km</div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹80</div>
+                  </div>
+                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ color: '#64748b' }}>100 - 500 km</div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹120</div>
+                  </div>
+                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ color: '#64748b' }}>&gt; 500 km (National)</div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹160</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
+                  * Coordinates calculate great-circle distance via Haversine. If seller/customer coordinates are unconfigured, fallback rules apply: Local: ₹40, Regional: ₹70, National: ₹110.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="submit"
+                  className="bb-btn bb-btn-primary"
+                  disabled={pricingSaving}
+                >
+                  {pricingSaving ? 'Saving Settings...' : '💾 Save Pricing Rules'}
+                </button>
+              </div>
+            </form>
           </div>
 
           {/* Recent Orders Overview */}

@@ -130,6 +130,7 @@ export interface Order {
   shippingAddress: Address;
   itemsSubtotal: number;
   estimatedShippingFee: number;
+  platformFee?: number;
   discount: number;
   totalAmount: number;
   paymentMethod: string;
@@ -410,6 +411,8 @@ export interface BackendCartItem {
   variantId: string;
   quantity: number;
   unitPrice: number;
+  sellerBasePrice?: number;
+  commissionAmount?: number;
   mrp: number;
   lineTotal: number;
   isAvailable: boolean;
@@ -466,6 +469,7 @@ export interface CheckoutValidationResponse {
   totalItems: number;
   totalQuantity: number;
   subtotalAmount: number;
+  platformFee?: number;
   taxAmount: number | null;
   taxStatus: 'CONFIGURED' | 'UNCONFIGURED';
   items: CheckoutItemValidationResult[];
@@ -523,6 +527,7 @@ export interface ReserveCheckoutResponse {
 export interface PlaceOrderPayload {
   checkoutAttemptId: string;
   notes?: string;
+  paymentMethod?: string;
 }
 
 export interface BackendSellerOrderItem {
