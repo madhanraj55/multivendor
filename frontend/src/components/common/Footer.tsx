@@ -228,10 +228,10 @@ export function Footer() {
               <ul className="bb-footer-links">
                 <li>
                   <a
-                    href="#seller-registration"
+                    href="/seller/register"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert('Seller Registration: Launching for independent sellers next quarter!');
+                      navigate('/seller/register');
                     }}
                     className="bb-footer-link"
                   >

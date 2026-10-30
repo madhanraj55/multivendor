@@ -14,7 +14,9 @@ const statusMap: Record<string, Order['status']> = {
   PENDING_PAYMENT: 'PENDING_PAYMENT',
   COMPLETED: 'CONFIRMED',
   CONFIRMED: 'CONFIRMED',
-  PROCESSING: 'PLACED',
+  PROCESSING: 'CONFIRMED',
+  PACKED: 'PACKED',
+  PARTIALLY_SHIPPED: 'PARTIALLY_SHIPPED',
   SHIPPED: 'SHIPPED',
   OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
   DELIVERED: 'DELIVERED',
@@ -23,11 +25,16 @@ const statusMap: Record<string, Order['status']> = {
 
 function mapPackageStatus(backendStatus: string): OrderPackage['packageStatus'] {
   if (backendStatus === 'PENDING_PAYMENT') return 'PENDING_PAYMENT';
-  if (backendStatus === 'DELIVERED') return 'DELIVERED';
+  if (backendStatus === 'CONFIRMED') return 'CONFIRMED';
+  if (backendStatus === 'PROCESSING') return 'PROCESSING';
+  if (backendStatus === 'PACKED') return 'PACKED';
   if (backendStatus === 'SHIPPED') return 'SHIPPED';
   if (backendStatus === 'OUT_FOR_DELIVERY') return 'OUT_FOR_DELIVERY';
+  if (backendStatus === 'DELIVERED') return 'DELIVERED';
   if (backendStatus === 'CANCELLED') return 'CANCELLED';
-  return 'PROCESSING';
+  if (backendStatus === 'RETURN_REQUESTED') return 'RETURN_REQUESTED';
+  if (backendStatus === 'RETURNED') return 'RETURNED';
+  return (backendStatus as OrderPackage['packageStatus']) || 'CONFIRMED';
 }
 
 /**

@@ -53,7 +53,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--color-slate-600);
+  color: var(--color-slate-900);
   transition: all var(--transition-fast);
 }
 
@@ -98,6 +98,10 @@
   width: 100%;
 }
 
+.bb-password-input-wrap .bb-input {
+  padding-right: 3.5rem;
+}
+
 .bb-password-toggle-btn {
   position: absolute;
   right: 10px;
@@ -105,9 +109,18 @@
   transform: translateY(-50%);
   background: none;
   border: none;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
   color: var(--color-slate-500);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  transition: all var(--transition-fast);
+}
+
+.bb-password-toggle-btn:hover {
+  color: var(--brand-primary);
+  background-color: var(--color-slate-100);
 }
 
 .bb-auth-action-row {

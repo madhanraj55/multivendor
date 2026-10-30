@@ -87,6 +87,20 @@ export function WishlistPage() {
     );
   }
 
+  if (authMode !== 'AUTHENTICATED') {
+    return (
+      <div className="bb-container bb-wishlist-container">
+        <EmptyState
+          icon="♡"
+          title="Sign in to View Your Wishlist"
+          description="Login to see items you previously saved and keep your wishlist synced across all your devices."
+          actionText="Sign In / Register"
+          onAction={() => navigate('/login?redirect=/wishlist')}
+        />
+      </div>
+    );
+  }
+
   if (wishlistProducts.length === 0) {
     return (
       <div className="bb-container bb-wishlist-container">

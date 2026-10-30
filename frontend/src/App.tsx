@@ -58,7 +58,7 @@ function MainRouterView() {
       return <AuthPages defaultMode="login" />;
     }
 
-    if (path === '/register') {
+    if (path === '/register' || path === '/seller/register') {
       return <AuthPages defaultMode="register" />;
     }
 
@@ -67,18 +67,70 @@ function MainRouterView() {
     }
 
     if (path === '/profile' || path === '/account') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Customer Sign In Required"
+              description="Please sign in to your account to view your profile settings and personal details."
+              actionText="Sign In to Account"
+              onAction={() => navigate('/login?redirect=/profile')}
+            />
+          </div>
+        );
+      }
       return <AccountProfilePage />;
     }
 
     if (path === '/addresses') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Customer Sign In Required"
+              description="Please sign in to manage your saved delivery addresses."
+              actionText="Sign In to Account"
+              onAction={() => navigate('/login?redirect=/addresses')}
+            />
+          </div>
+        );
+      }
       return <AddressManagementPage />;
     }
 
     if (path === '/orders') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Customer Sign In Required"
+              description="Please sign in to view your past orders, delivery tracking, and package status."
+              actionText="Sign In to Account"
+              onAction={() => navigate('/login?redirect=/orders')}
+            />
+          </div>
+        );
+      }
       return <OrdersPage />;
     }
 
     if (path === '/checkout') {
+      if (authMode !== 'AUTHENTICATED' || !authUser) {
+        return (
+          <div className="bb-container bb-not-found-container">
+            <EmptyState
+              icon="🔒"
+              title="Sign In Required to Checkout"
+              description="To place an order and select your delivery address, please sign in or create an account."
+              actionText="Sign In to Proceed to Checkout"
+              onAction={() => navigate('/login?redirect=/checkout')}
+            />
+          </div>
+        );
+      }
       return <CheckoutPage />;
     }
 

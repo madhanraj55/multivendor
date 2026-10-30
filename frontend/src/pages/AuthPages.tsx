@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from '../context/RouterContext.tsx';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { authApi } from '../services/authApi.ts';
@@ -9,11 +9,28 @@ const PASSWORD_REGEX = /((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/;
 const INDIAN_PHONE_REGEX = /^[6-9]\d{9}$/;
 
 export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | 'register' }) {
-  const { navigate } = useRouter();
+  const { navigate, queryParams, path } = useRouter();
   const { setAuthenticatedSession } = useMarketplace();
+  const redirectTarget = queryParams.redirect || '';
 
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(defaultMode);
-  const [selectedRole, setSelectedRole] = useState<'CUSTOMER' | 'SELLER'>('CUSTOMER');
+  const isSellerRoute = path === '/seller/register' || queryParams.role?.toUpperCase() === 'SELLER';
+  const initialMode = isSellerRoute
+    ? 'register'
+    : queryParams.mode === 'register'
+    ? 'register'
+    : defaultMode;
+
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialMode);
+  const [selectedRole, setSelectedRole] = useState<'CUSTOMER' | 'SELLER'>(
+    isSellerRoute ? 'SELLER' : 'CUSTOMER'
+  );
+
+  useEffect(() => {
+    if (path === '/seller/register' || queryParams.role?.toUpperCase() === 'SELLER') {
+      setSelectedRole('SELLER');
+      setMode('register');
+    }
+  }, [path, queryParams.role]);
 
   // Form inputs
   const [email, setEmail] = useState('');
@@ -162,6 +179,9 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
           if (import.meta.env.DEV && response.devVerificationToken) {
             sessionStorage.setItem('bb_dev_verification_token', response.devVerificationToken);
           }
+          if (redirectTarget) {
+            sessionStorage.setItem('bb_auth_redirect', redirectTarget);
+          }
         } catch {
           // quota fallback
         }
@@ -173,7 +193,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
               : 'Customer account registered! Please check email to verify.')
         );
         setTimeout(() => {
-          navigate('/verify-email');
+          navigate(redirectTarget ? `/verify-email?redirect=${encodeURIComponent(redirectTarget)}` : '/verify-email');
         }, 1200);
       } catch (err) {
         if (err instanceof ApiError) {
@@ -201,8 +221,26 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
         user: response.user,
       });
 
-      // Role-based destination
-      if (response.user.role === 'SELLER') {
+      const effectiveRedirect = redirectTarget || (() => {
+        try {
+          return sessionStorage.getItem('bb_auth_redirect') || '';
+        } catch {
+          return '';
+        }
+      })();
+
+      if (effectiveRedirect) {
+        try {
+          sessionStorage.removeItem('bb_auth_redirect');
+        } catch {
+          // fallback
+        }
+      }
+
+      // Role-based destination or return redirect
+      if (effectiveRedirect && effectiveRedirect.startsWith('/') && response.user.role === 'CUSTOMER') {
+        navigate(effectiveRedirect);
+      } else if (response.user.role === 'SELLER') {
         navigate('/seller/dashboard');
       } else if (response.user.role === 'ADMIN') {
         navigate('/admin/orders');
@@ -238,12 +276,34 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
             {mode === 'login'
               ? 'Access your Customer orders or Vendor Management Dashboard'
               : mode === 'register'
-              ? 'Join BharatBazaar as an authentic Shopper or verified Vendor'
+              ? 'Join BharatBazaar as an authentic Seller'
               : mode === 'forgot'
               ? 'Enter your registered email address to receive password reset instructions'
               : 'Enter the verification token and choose a new secure password'}
           </p>
         </div>
+
+        {redirectTarget === '/checkout' && (
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              marginBottom: '1.25rem',
+              borderRadius: '8px',
+              backgroundColor: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              color: '#1e40af',
+              fontSize: '0.875rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+            }}
+          >
+            <span style={{ fontSize: '1.25rem' }}>🛍️</span>
+            <span>
+              <strong>Ready to checkout?</strong> Sign in or create an account to select your delivery address and complete your order.
+            </span>
+          </div>
+        )}
 
         {/* Tab switch (only visible for login / register) */}
         {(mode === 'login' || mode === 'register') && (
@@ -406,7 +466,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
                     className="bb-password-toggle-btn"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? '🙈' : '👁️'}
+                    {showPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
                 <p className={`bb-input-hint ${isPasswordStrong ? 'valid' : ''}`}>
@@ -453,14 +513,14 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
                     className={`bb-btn bb-btn-sm ${selectedRole === 'CUSTOMER' ? 'bb-btn-primary' : 'bb-btn-outline'}`}
                     onClick={() => setSelectedRole('CUSTOMER')}
                   >
-                    🛍️ Customer
+                    Customer
                   </button>
                   <button
                     type="button"
                     className={`bb-btn bb-btn-sm ${selectedRole === 'SELLER' ? 'bb-btn-primary' : 'bb-btn-outline'}`}
                     onClick={() => setSelectedRole('SELLER')}
                   >
-                    🏬 Vendor / Seller
+                  Seller
                   </button>
                 </div>
               </div>
@@ -501,7 +561,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                 />
-                <p className="bb-input-hint">Required. Must be 10 digits starting with 6, 7, 8, or 9.</p>
+                <p className="bb-input-hint">Required. Must be 10 digits only.</p>
               </div>
             </>
           )}
@@ -553,7 +613,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
                     className="bb-password-toggle-btn"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? '🙈' : '👁️'}
+                    {showPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
                 {mode === 'register' && (
@@ -583,7 +643,7 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
           )}
         </form>
 
-        <p className="bb-terms-text" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+        <p className="bb-terms-text" style={{ marginTop: '0.5rem', textAlign: 'center',fontSize:'0.6rem' }}>
           By continuing, you agree to BharatBazaar’s Terms of Use and Privacy Policy.
         </p>
       </div>

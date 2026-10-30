@@ -65,6 +65,8 @@ export function SellerOrdersPage() {
   const [updatingStatus, setUpdatingStatus] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [updatingInlineSubOrder, setUpdatingInlineSubOrder] = useState<string | null>(null);
+  const [tableNotice, setTableNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Request sequence counter to discard superseded async responses
   const requestSeqRef = useRef<number>(0);
@@ -209,6 +211,54 @@ export function SellerOrdersPage() {
     }
   };
 
+  // Quick status update for modal
+  const handleQuickUpdate = async (nextStatus: SellerOrderStatus) => {
+    if (!detailOrder) return;
+    setUpdatingStatus(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const result = await sellerOrdersApi.updateSellerOrderStatus(detailOrder.subOrderNumber, {
+        status: nextStatus,
+        notes: `Sequential fulfillment to ${nextStatus}`,
+      });
+      setActionSuccess(result.message || `Sub-order status updated to ${result.status}`);
+      setDetailRefreshTrigger((c) => c + 1);
+      setRefreshTrigger((c) => c + 1);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to update order status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  // Inline status update directly from table
+  const handleInlineStatusUpdate = async (
+    subOrderNumber: string,
+    nextStatus: SellerOrderStatus
+  ) => {
+    setUpdatingInlineSubOrder(subOrderNumber);
+    setTableNotice(null);
+    try {
+      const result = await sellerOrdersApi.updateSellerOrderStatus(subOrderNumber, {
+        status: nextStatus,
+        notes: `Status advanced to ${nextStatus} via seller dashboard`,
+      });
+      setTableNotice({
+        type: 'success',
+        message: result.message || `Sub-order ${subOrderNumber} updated to ${formatSellerOrderStatusLabel(nextStatus)}`,
+      });
+      setRefreshTrigger((c) => c + 1);
+    } catch (err: unknown) {
+      setTableNotice({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to update order status',
+      });
+    } finally {
+      setUpdatingInlineSubOrder(null);
+    }
+  };
+
   // Format currency in Indian Rupees
   const formatCurrency = (amount: number, currency: string = 'INR') => {
     return new Intl.NumberFormat('en-IN', {
@@ -275,6 +325,34 @@ export function SellerOrdersPage() {
               {tab.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Table Action Notice */}
+      {tableNotice && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 'var(--space-4)',
+            padding: '0.75rem 1rem',
+            background: tableNotice.type === 'success' ? '#f0fdf4' : '#fef2f2',
+            border: `1px solid ${tableNotice.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+            borderRadius: '8px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: tableNotice.type === 'success' ? '#166534' : '#991b1b',
+            fontSize: '0.875rem',
+          }}
+        >
+          <span>{tableNotice.type === 'success' ? '✓ ' : '⚠️ '}{tableNotice.message}</span>
+          <button
+            type="button"
+            className="bb-btn bb-btn-ghost bb-btn-sm"
+            onClick={() => setTableNotice(null)}
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -378,13 +456,48 @@ export function SellerOrdersPage() {
                         </span>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="bb-btn bb-btn-outline bb-btn-sm"
-                          onClick={() => handleOpenDetail(so.subOrderNumber)}
-                        >
-                          Manage ↗
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          {(so.status === 'CONFIRMED' || so.status === 'PROCESSING') && (
+                            <button
+                              type="button"
+                              className="bb-btn bb-btn-primary bb-btn-sm"
+                              disabled={updatingInlineSubOrder === so.subOrderNumber}
+                              onClick={() => handleInlineStatusUpdate(so.subOrderNumber, 'PACKED')}
+                              title="Mark this package as Packed"
+                            >
+                              {updatingInlineSubOrder === so.subOrderNumber ? 'Packing...' : '📦 Pack'}
+                            </button>
+                          )}
+                          {so.status === 'PACKED' && (
+                            <button
+                              type="button"
+                              className="bb-btn bb-btn-primary bb-btn-sm"
+                              disabled={updatingInlineSubOrder === so.subOrderNumber}
+                              onClick={() => handleInlineStatusUpdate(so.subOrderNumber, 'SHIPPED')}
+                              title="Mark this package as Shipped"
+                            >
+                              {updatingInlineSubOrder === so.subOrderNumber ? 'Shipping...' : '🚚 Ship'}
+                            </button>
+                          )}
+                          {so.status === 'SHIPPED' && (
+                            <button
+                              type="button"
+                              className="bb-btn bb-btn-success bb-btn-sm"
+                              disabled={updatingInlineSubOrder === so.subOrderNumber}
+                              onClick={() => handleInlineStatusUpdate(so.subOrderNumber, 'DELIVERED')}
+                              title="Mark this package as Delivered"
+                            >
+                              {updatingInlineSubOrder === so.subOrderNumber ? 'Delivering...' : '✓ Deliver'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="bb-btn bb-btn-outline bb-btn-sm"
+                            onClick={() => handleOpenDetail(so.subOrderNumber)}
+                          >
+                            Manage ↗
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -693,7 +806,50 @@ export function SellerOrdersPage() {
                         🔒 Fulfillment actions are locked while awaiting payment.
                       </div>
                     ) : getSellerAllowedTransitions(detailOrder.status).length > 0 ? (
-                      <form className="bb-seller-action-form" onSubmit={handleStatusUpdate}>
+                      <div>
+                        {/* Quick Action One-Click Advance Buttons */}
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-slate-700)' }}>
+                            Quick Advance:
+                          </span>
+                          {(detailOrder.status === 'CONFIRMED' || detailOrder.status === 'PROCESSING') && (
+                            <button
+                              type="button"
+                              className="bb-btn bb-btn-primary bb-btn-sm"
+                              disabled={updatingStatus}
+                              onClick={() => handleQuickUpdate('PACKED')}
+                            >
+                              {updatingStatus ? 'Updating...' : '📦 Mark as Packed'}
+                            </button>
+                          )}
+                          {detailOrder.status === 'PACKED' && (
+                            <button
+                              type="button"
+                              className="bb-btn bb-btn-primary bb-btn-sm"
+                              disabled={updatingStatus}
+                              onClick={() => handleQuickUpdate('SHIPPED')}
+                            >
+                              {updatingStatus ? 'Updating...' : '🚚 Mark as Shipped'}
+                            </button>
+                          )}
+                          {detailOrder.status === 'SHIPPED' && (
+                            <button
+                              type="button"
+                              className="bb-btn bb-btn-success bb-btn-sm"
+                              disabled={updatingStatus}
+                              onClick={() => handleQuickUpdate('DELIVERED')}
+                            >
+                              {updatingStatus ? 'Updating...' : '✓ Mark as Delivered'}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Custom status selector & dispatch notes */}
+                        <div style={{ borderTop: '1px solid var(--color-slate-200)', paddingTop: '12px' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-slate-500)', marginBottom: '8px' }}>
+                            Or select custom transition & add fulfillment notes:
+                          </div>
+                          <form className="bb-seller-action-form" onSubmit={handleStatusUpdate}>
                         <div className="bb-seller-action-row">
                           <div className="bb-seller-action-field-status">
                             <label
@@ -743,7 +899,9 @@ export function SellerOrdersPage() {
                             {updatingStatus ? 'Updating...' : 'Update Status'}
                           </button>
                         </div>
-                      </form>
+                          </form>
+                        </div>
+                      </div>
                     ) : (
                       <div className="bb-seller-action-none">
                         This package is currently in status <strong>{detailOrder.status}</strong>. No further seller actions

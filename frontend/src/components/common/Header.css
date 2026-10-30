@@ -31,7 +31,7 @@
   gap: var(--space-4);
 }
 
-.bb-pincode-trigger {
+/* .bb-pincode-trigger {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -42,12 +42,12 @@
   padding: 2px 6px;
   border-radius: var(--radius-xs);
   transition: background var(--transition-fast);
-}
+} */
 
-.bb-pincode-trigger:hover {
+/* .bb-pincode-trigger:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--color-white);
-}
+} */
 
 .bb-pincode-highlight {
   font-weight: var(--font-weight-bold);
@@ -75,7 +75,7 @@
 
 /* Main Header Row */
 .bb-header-main {
-  padding: 0.85rem 0;
+  padding: 0rem 0;
   border-bottom: 1px solid var(--color-slate-200);
 }
 
@@ -128,6 +128,7 @@
   font-weight: var(--font-weight-medium);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  display: none;
 }
 
 /* Search Bar */
@@ -160,6 +161,7 @@
   outline: none;
   cursor: pointer;
   max-width: 140px;
+  display: none;
 }
 
 .bb-search-input {
@@ -260,16 +262,35 @@
 .bb-header-nav {
   background-color: var(--color-white);
   border-bottom: 1px solid var(--color-slate-200);
-  overflow-x: auto;
+  overflow: hidden;
   white-space: nowrap;
-  scrollbar-width: thin;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+  mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+}
+
+.bb-header-nav:active,
+.bb-header-nav.is-interacting {
+  cursor: grabbing;
+}
+
+.bb-header-nav-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
 }
 
 .bb-header-nav-list {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 0.25rem 0;
+  padding: 0rem 0;
+  margin: 0;
+  list-style: none;
 }
 
 .bb-nav-item-link {
@@ -277,12 +298,14 @@
   align-items: center;
   gap: 6px;
   padding: 0.5rem 0.85rem;
-  font-size: var(--text-sm);
+  font-size: 12px;
   font-weight: var(--font-weight-medium);
   color: var(--color-slate-700);
   border-radius: var(--radius-md);
   text-decoration: none;
   transition: all var(--transition-fast);
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .bb-nav-item-link:hover,
@@ -316,21 +339,35 @@
     display: block;
   }
 
-  .bb-header-search {
-    order: 3;
-    width: 100%;
-    max-width: 100%;
-  }
-
   .bb-header-main-inner {
     flex-wrap: wrap;
     row-gap: var(--space-2);
   }
 
+  .bb-header-search {
+    order: 2;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .bb-header-actions {
+    order: 3;
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--color-slate-100);
+  }
+
   .bb-header-actions .bb-header-btn-label {
-    display: none;
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: var(--font-weight-medium);
   }
 }
+
+
 
 /* Mobile Drawer */
 .bb-mobile-drawer-overlay {

@@ -54,9 +54,6 @@ export function HomePage() {
           <div className="bb-section-header">
             <div className="bb-section-title-wrap">
               <h2 className="bb-section-title">Trending Deals & Top Rated</h2>
-              <p className="bb-section-subtitle">
-                Authentic items sourced directly from verified Indian merchants
-              </p>
             </div>
             <button
               type="button"

@@ -6,8 +6,16 @@ import { ApiError, sessionManager } from '../services/apiClient.ts';
 import './EmailVerificationPage.css';
 
 export function EmailVerificationPage() {
-  const { navigate } = useRouter();
+  const { navigate, queryParams } = useRouter();
   const { user, setUser } = useMarketplace();
+
+  const redirectTarget = queryParams.redirect || (() => {
+    try {
+      return sessionStorage.getItem('bb_auth_redirect') || '';
+    } catch {
+      return '';
+    }
+  })();
 
   // Retrieve email from sessionStorage, context, or query params
   const [emailInput, setEmailInput] = useState<string>(() => {
@@ -221,7 +229,10 @@ export function EmailVerificationPage() {
               <button
                 type="button"
                 className="bb-btn bb-btn-primary bb-btn-block bb-btn-lg"
-                onClick={() => navigate('/login')}
+                onClick={() => {
+                  const target = redirectTarget ? `/login?redirect=${encodeURIComponent(redirectTarget)}` : '/login';
+                  navigate(target);
+                }}
               >
                 Sign In to Account
               </button>

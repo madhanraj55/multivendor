@@ -175,21 +175,32 @@ export function OrdersPage() {
     }
   };
 
-  const getStatusBadge = (status: Order['status']) => {
+  const getStatusBadge = (status: Order['status'] | string) => {
     switch (status) {
       case 'PENDING_PAYMENT':
         return <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>;
-      case 'DELIVERED':
-        return <span className="bb-badge bb-badge-success">Delivered ✓</span>;
+      case 'PLACED':
+        return <span className="bb-badge bb-badge-warning">Order Placed 📝</span>;
+      case 'CONFIRMED':
+        return <span className="bb-badge bb-badge-primary">Confirmed ✓</span>;
+      case 'PROCESSING':
+        return <span className="bb-badge bb-badge-primary">Processing ⚙️</span>;
+      case 'PACKED':
+        return <span className="bb-badge bb-badge-primary">Packed 📦</span>;
+      case 'PARTIALLY_SHIPPED':
+        return <span className="bb-badge bb-badge-primary">Partially Shipped 🚚</span>;
       case 'SHIPPED':
         return <span className="bb-badge bb-badge-primary">In Transit 🚚</span>;
       case 'OUT_FOR_DELIVERY':
         return <span className="bb-badge bb-badge-warning">Out for Delivery 🛵</span>;
-      case 'CONFIRMED':
-      case 'PLACED':
-        return <span className="bb-badge bb-badge-warning">Order Placed ⏳</span>;
+      case 'DELIVERED':
+        return <span className="bb-badge bb-badge-success">Delivered ✓</span>;
       case 'CANCELLED':
         return <span className="bb-badge bb-badge-danger">Cancelled ✕</span>;
+      case 'RETURN_REQUESTED':
+        return <span className="bb-badge bb-badge-warning">Return Requested ↩</span>;
+      case 'RETURNED':
+        return <span className="bb-badge bb-badge-neutral">Returned ↩</span>;
       default:
         return <span className="bb-badge bb-badge-neutral">{status}</span>;
     }
@@ -267,11 +278,32 @@ export function OrdersPage() {
       );
     }
 
-    const isStepActive = (stepIndex: number) => {
-      if (selectedOrder.status === 'PENDING_PAYMENT') return false;
-      const statuses = ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED'];
-      const currentIndex = statuses.indexOf(selectedOrder.status);
-      return currentIndex >= stepIndex;
+    const isStepActive = (stepIndex: number, specificStatus?: string) => {
+      const status = specificStatus || selectedOrder.status;
+      if (status === 'CANCELLED') return false;
+
+      // 5-Stage Tracking Order:
+      // 0: Placed
+      // 1: Confirmed
+      // 2: Packed
+      // 3: Shipped
+      // 4: Delivered
+      const statusLevel: Record<string, number> = {
+        PENDING_PAYMENT: 0,
+        PLACED: 0,
+        CONFIRMED: 1,
+        PROCESSING: 1,
+        PACKED: 2,
+        PARTIALLY_SHIPPED: 2,
+        SHIPPED: 3,
+        OUT_FOR_DELIVERY: 3,
+        DELIVERED: 4,
+        RETURN_REQUESTED: 4,
+        RETURNED: 4,
+      };
+
+      const currentLevel = statusLevel[status] ?? 0;
+      return currentLevel >= stepIndex;
     };
 
     return (
@@ -352,7 +384,7 @@ export function OrdersPage() {
             </div>
           </div>
 
-          {/* Stepper */}
+          {/* Stepper with 5 tracking statuses: Placed -> Confirmed -> Packed -> Shipped -> Delivered */}
           <div className="bb-order-timeline" aria-label="Order progress">
             <div className={`bb-timeline-step ${isStepActive(0) ? 'completed' : ''}`}>
               <div className="bb-timeline-dot">1</div>
@@ -364,10 +396,14 @@ export function OrdersPage() {
             </div>
             <div className={`bb-timeline-step ${isStepActive(2) ? 'completed' : ''}`}>
               <div className="bb-timeline-dot">3</div>
-              <span className="bb-timeline-label">Shipped</span>
+              <span className="bb-timeline-label">Packed</span>
             </div>
             <div className={`bb-timeline-step ${isStepActive(3) ? 'completed' : ''}`}>
               <div className="bb-timeline-dot">4</div>
+              <span className="bb-timeline-label">Shipped</span>
+            </div>
+            <div className={`bb-timeline-step ${isStepActive(4) ? 'completed' : ''}`}>
+              <div className="bb-timeline-dot">5</div>
               <span className="bb-timeline-label">Delivered</span>
             </div>
           </div>
@@ -391,10 +427,11 @@ export function OrdersPage() {
                     {pkg.packageStatus === 'PENDING_PAYMENT' ? (
                       <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span className="bb-badge bb-badge-neutral">
                           Waybill: {pkg.trackingNumber}
                         </span>
+                        {getStatusBadge(pkg.packageStatus)}
                         {pkg.packageStatus === 'DELIVERED' && (
                           <button
                             type="button"
@@ -413,6 +450,36 @@ export function OrdersPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Multi-Vendor Sub-Order Stepper */}
+                {selectedOrder.packages.length > 1 && (
+                  <div
+                    className="bb-order-timeline"
+                    style={{ margin: '0.5rem 0 1rem', padding: '0 0.5rem' }}
+                    aria-label={`Package ${pkg.trackingNumber} progress`}
+                  >
+                    <div className={`bb-timeline-step ${isStepActive(0, pkg.packageStatus) ? 'completed' : ''}`}>
+                      <div className="bb-timeline-dot" style={{ width: '22px', height: '22px', fontSize: '0.65rem' }}>1</div>
+                      <span className="bb-timeline-label" style={{ fontSize: '0.7rem' }}>Placed</span>
+                    </div>
+                    <div className={`bb-timeline-step ${isStepActive(1, pkg.packageStatus) ? 'completed' : ''}`}>
+                      <div className="bb-timeline-dot" style={{ width: '22px', height: '22px', fontSize: '0.65rem' }}>2</div>
+                      <span className="bb-timeline-label" style={{ fontSize: '0.7rem' }}>Confirmed</span>
+                    </div>
+                    <div className={`bb-timeline-step ${isStepActive(2, pkg.packageStatus) ? 'completed' : ''}`}>
+                      <div className="bb-timeline-dot" style={{ width: '22px', height: '22px', fontSize: '0.65rem' }}>3</div>
+                      <span className="bb-timeline-label" style={{ fontSize: '0.7rem' }}>Packed</span>
+                    </div>
+                    <div className={`bb-timeline-step ${isStepActive(3, pkg.packageStatus) ? 'completed' : ''}`}>
+                      <div className="bb-timeline-dot" style={{ width: '22px', height: '22px', fontSize: '0.65rem' }}>4</div>
+                      <span className="bb-timeline-label" style={{ fontSize: '0.7rem' }}>Shipped</span>
+                    </div>
+                    <div className={`bb-timeline-step ${isStepActive(4, pkg.packageStatus) ? 'completed' : ''}`}>
+                      <div className="bb-timeline-dot" style={{ width: '22px', height: '22px', fontSize: '0.65rem' }}>5</div>
+                      <span className="bb-timeline-label" style={{ fontSize: '0.7rem' }}>Delivered</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="bb-order-items-grid">
                   {pkg.items.map((item, itemIdx) => (
@@ -680,8 +747,8 @@ export function OrdersPage() {
 
   const filteredOrders = orders.filter((o) => {
     if (activeTab === 'ALL') return true;
-    if (activeTab === 'PLACED') return o.status === 'PLACED' || o.status === 'CONFIRMED' || o.status === 'PENDING_PAYMENT';
-    if (activeTab === 'SHIPPED') return o.status === 'SHIPPED' || o.status === 'OUT_FOR_DELIVERY';
+    if (activeTab === 'PLACED') return o.status === 'PLACED' || o.status === 'CONFIRMED' || o.status === 'PACKED' || o.status === 'PENDING_PAYMENT';
+    if (activeTab === 'SHIPPED') return o.status === 'SHIPPED' || o.status === 'OUT_FOR_DELIVERY' || o.status === 'PARTIALLY_SHIPPED';
     if (activeTab === 'DELIVERED') return o.status === 'DELIVERED';
     return true;
   });
@@ -733,6 +800,13 @@ export function OrdersPage() {
           onClick={() => setActiveTab('ALL')}
         >
           All Orders ({orders.length})
+        </button>
+        <button
+          type="button"
+          className={`bb-orders-tab ${activeTab === 'PLACED' ? 'active' : ''}`}
+          onClick={() => setActiveTab('PLACED')}
+        >
+          Active / Processing
         </button>
         <button
           type="button"
@@ -800,13 +874,16 @@ export function OrdersPage() {
                         <div className="bb-order-package-seller">
                           <span>🏬 Dispatched by: {pkg.sellerName}</span>
                         </div>
-                        {pkg.packageStatus === 'PENDING_PAYMENT' ? (
-                          <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>
-                        ) : (
-                          <span className="bb-badge bb-badge-neutral">
-                            Tracking: {pkg.trackingNumber}
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {getStatusBadge(pkg.packageStatus)}
+                          {pkg.packageStatus === 'PENDING_PAYMENT' ? (
+                            <span className="bb-badge bb-badge-warning">Awaiting Payment ⏳</span>
+                          ) : (
+                            <span className="bb-badge bb-badge-neutral">
+                              Tracking: {pkg.trackingNumber}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {pkg.items.length > 0 ? (

@@ -184,35 +184,45 @@ export function ProductListingPage() {
               ? `Showing verified results matching your search`
               : currentCategoryObj?.description
               ? currentCategoryObj.description
-              : 'Authentic products sourced directly from registered Indian merchants'}
+              : ''}
           </p>
         </div>
-
-        {/* Mobile Filter Trigger */}
-        <button
-          type="button"
-          className="bb-btn bb-btn-outline bb-mobile-filter-btn"
-          onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
-        >
-          ⚙ Filters & Sort
-        </button>
       </div>
 
       {/* Main Layout: Sidebar Filters + Product Grid */}
       <div className="bb-plp-layout">
+        {/* Mobile Filter Drawer Overlay */}
+        {mobileFilterOpen && (
+          <div
+            className="bb-mobile-filter-overlay"
+            onClick={() => setMobileFilterOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Filter Sidebar */}
         <aside
           className={`bb-plp-sidebar ${mobileFilterOpen ? 'open' : ''}`}
           aria-label="Product catalogue filters"
         >
           <div className="bb-filter-header">
-            <span className="bb-filter-title">Filters</span>
+            <div className="bb-filter-header-left">
+              <span className="bb-filter-title">Filters</span>
+              <button
+                type="button"
+                className="bb-clear-filter-btn"
+                onClick={clearAllFilters}
+              >
+                Reset All
+              </button>
+            </div>
             <button
               type="button"
-              className="bb-clear-filter-btn"
-              onClick={clearAllFilters}
+              className="bb-filter-close-btn"
+              onClick={() => setMobileFilterOpen(false)}
+              aria-label="Close filters"
             >
-              Reset All
+              ✕
             </button>
           </div>
 
@@ -341,6 +351,38 @@ export function ProductListingPage() {
         <section className="bb-plp-content" aria-label="Catalog Products">
           {/* Top Bar: Count & Sorting */}
           <div className="bb-plp-controls">
+            {/* Mobile Filter Trigger */}
+            <button
+              type="button"
+              className="bb-btn bb-btn-outline bb-mobile-filter-btn"
+              onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
+              aria-label="Open Filters"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="bb-filter-btn-icon"
+              >
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <circle cx="4" cy="12" r="2.5" />
+                <circle cx="12" cy="10" r="2.5" />
+                <circle cx="20" cy="14" r="2.5" />
+              </svg>
+              <span>Filters</span>
+            </button>
+
             <span className="bb-plp-count">
               Showing <strong>{sortedProducts.length}</strong> items
             </span>

@@ -689,12 +689,13 @@ export class OrdersService {
       const lockedSubOrders = await tx.$queryRaw<
         Array<{
           id: string;
+          orderId: string;
           shopId: string;
           status: SellerOrderStatus;
           subOrderNumber: string;
         }>
       >`
-        SELECT "id", "shopId", "status", "subOrderNumber"
+        SELECT "id", "orderId", "shopId", "status", "subOrderNumber"
         FROM "SellerOrder"
         WHERE "subOrderNumber" = ${subOrderNumber}
         FOR UPDATE;
@@ -733,6 +734,7 @@ export class OrdersService {
       const allowedTransitions: Record<SellerOrderStatus, SellerOrderStatus[]> = {
         [SellerOrderStatus.PENDING_PAYMENT]: [], // Handled above
         [SellerOrderStatus.CONFIRMED]: [
+          SellerOrderStatus.PACKED,
           SellerOrderStatus.PROCESSING,
           SellerOrderStatus.CANCELLED,
         ],
@@ -815,12 +817,81 @@ export class OrdersService {
         },
       });
 
+      // 7. Synchronize parent Order status based on all sibling sub-orders
+      const parentOrder = await tx.order.findUnique({
+        where: { id: currentSubOrder.orderId },
+        include: {
+          sellerOrders: {
+            select: { id: true, status: true },
+          },
+        },
+      });
+
+      let newParentStatus: OrderStatus | undefined;
+      if (parentOrder && parentOrder.sellerOrders.length > 0) {
+        const allSubOrders = parentOrder.sellerOrders.map((so) =>
+          so.id === currentSubOrder.id ? { ...so, status: targetStatus } : so,
+        );
+
+        const activeSubOrders = allSubOrders.filter(
+          (so) =>
+            so.status !== SellerOrderStatus.CANCELLED &&
+            so.status !== SellerOrderStatus.RETURNED,
+        );
+
+        if (activeSubOrders.length > 0) {
+          const allDelivered = activeSubOrders.every(
+            (so) => so.status === SellerOrderStatus.DELIVERED,
+          );
+          const allShipped = activeSubOrders.every(
+            (so) =>
+              so.status === SellerOrderStatus.SHIPPED ||
+              so.status === SellerOrderStatus.DELIVERED,
+          );
+          const anyShipped = activeSubOrders.some(
+            (so) =>
+              so.status === SellerOrderStatus.SHIPPED ||
+              so.status === SellerOrderStatus.DELIVERED,
+          );
+
+          if (allDelivered && parentOrder.status !== OrderStatus.DELIVERED) {
+            newParentStatus = OrderStatus.DELIVERED;
+          } else if (allShipped && parentOrder.status !== OrderStatus.SHIPPED) {
+            newParentStatus = OrderStatus.SHIPPED;
+          } else if (
+            anyShipped &&
+            parentOrder.status !== OrderStatus.PARTIALLY_SHIPPED &&
+            parentOrder.status !== OrderStatus.SHIPPED &&
+            parentOrder.status !== OrderStatus.DELIVERED
+          ) {
+            newParentStatus = OrderStatus.PARTIALLY_SHIPPED;
+          }
+        }
+
+        if (newParentStatus) {
+          await tx.order.update({
+            where: { id: currentSubOrder.orderId },
+            data: { status: newParentStatus },
+          });
+
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: currentSubOrder.orderId,
+              status: newParentStatus,
+              notes: `Parent order updated to ${newParentStatus} automatically after sub-order ${currentSubOrder.subOrderNumber} status changed to ${targetStatus}`,
+              changedById: userId,
+            },
+          });
+        }
+      }
+
       return {
         message: `Sub-order status updated to ${targetStatus}`,
         subOrderNumber: updatedSubOrder.subOrderNumber,
         previousStatus: currentStatus,
         status: updatedSubOrder.status,
         deliveredAt: updatedSubOrder.deliveredAt,
+        parentOrderStatus: newParentStatus ?? parentOrder?.status,
       };
     });
   }

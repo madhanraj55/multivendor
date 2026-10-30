@@ -28,7 +28,7 @@ export function getSellerAllowedTransitions(
 ): SellerOrderStatus[] {
   const transitions: Record<string, SellerOrderStatus[]> = {
     PENDING_PAYMENT: [], // Strictly blocked
-    CONFIRMED: ['PROCESSING', 'CANCELLED'],
+    CONFIRMED: ['PACKED', 'PROCESSING', 'CANCELLED'],
     PROCESSING: ['PACKED', 'CANCELLED'],
     PACKED: ['SHIPPED', 'CANCELLED'],
     SHIPPED: ['DELIVERED'],
@@ -56,11 +56,11 @@ export function formatSellerOrderStatusLabel(status: string): string {
     case 'PENDING_PAYMENT':
       return 'Awaiting Payment';
     case 'CONFIRMED':
-      return 'Payment Confirmed / Ready to Process';
+      return 'Confirmed / Ready to Pack';
     case 'PROCESSING':
       return 'Processing & Packing';
     case 'PACKED':
-      return 'Packed / Awaiting Pickup';
+      return 'Packed / Ready to Ship';
     case 'SHIPPED':
       return 'Shipped / In Transit';
     case 'DELIVERED':

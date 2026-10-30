@@ -17,10 +17,10 @@
   gap: var(--space-4);
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   color: var(--color-white);
-  padding: var(--space-6) var(--space-8);
+  padding: 20px 20px;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
-  border: 1px solid var(--color-slate-800);
+  border: 0px solid var(--color-slate-800);
 }
 
 .bb-seller-header-title-area {
@@ -446,6 +446,7 @@
 .bb-seller-isolation-note {
   font-size: var(--text-xs);
   color: var(--color-slate-500);
+  display: none;
 }
 
 /* Modal Helper Styles */
@@ -673,6 +674,7 @@
   .bb-seller-isolation-note {
     text-align: center;
     font-size: 11px;
+    display:none;
   }
 
   .bb-seller-modal {
@@ -721,5 +723,18 @@
     min-height: 42px;
     justify-content: center;
   }
+}
+
+.bb-btn-success {
+  background-color: #059669;
+  color: #ffffff;
+  border: 1px solid #059669;
+  box-shadow: var(--shadow-xs);
+}
+
+.bb-btn-success:hover:not(:disabled) {
+  background-color: #047857;
+  border-color: #047857;
+  color: #ffffff;
 }
 

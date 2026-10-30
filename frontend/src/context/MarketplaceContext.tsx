@@ -126,8 +126,33 @@ function saveStoredProfileMeta(userId: string, meta: { gender?: string; dateOfBi
 }
 
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
-  // Guest cart in local memory
-  const [demoCart, setDemoCart] = useState<CartItem[]>([]);
+  // Guest cart persisted in localStorage for seamless unauthenticated browsing
+  const [demoCart, setDemoCart] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('bb_guest_cart');
+        if (raw) return JSON.parse(raw);
+      } catch {
+        // storage fallback
+      }
+    }
+    return [];
+  });
+
+  // Keep guest cart in localStorage synced
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (demoCart.length > 0) {
+          localStorage.setItem('bb_guest_cart', JSON.stringify(demoCart));
+        } else {
+          localStorage.removeItem('bb_guest_cart');
+        }
+      } catch {
+        // quota fallback
+      }
+    }
+  }, [demoCart]);
 
   const [authCart, setAuthCart] = useState<CartItem[]>([]);
   const [authCartSubtotal, setAuthCartSubtotal] = useState<number>(0);
@@ -609,22 +634,120 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         });
 
       const currentReqId = ++cartRequestIdRef.current;
-      cartApi
-        .getCart()
-        .then((res) => {
-          if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
-          const uiItems = res.items.map(mapBackendCartItemToUi);
-          setAuthCart(uiItems);
-          authCartRef.current = uiItems;
-          setAuthCartSubtotal(res.subtotalAmount);
-          setCartError(null);
-          setCartLoading(false);
-        })
-        .catch((err) => {
-          if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
-          setCartError(err instanceof Error ? err.message : 'Failed to load cart from server');
-          setCartLoading(false);
-        });
+
+      // Check if there are unauthenticated guest items to merge into the user's account cart
+      let guestItemsToMerge: CartItem[] = [];
+      try {
+        const stored = localStorage.getItem('bb_guest_cart');
+        if (stored) {
+          guestItemsToMerge = JSON.parse(stored);
+        }
+      } catch {
+        // storage fallback
+      }
+      if (guestItemsToMerge.length === 0 && demoCart.length > 0) {
+        guestItemsToMerge = demoCart;
+      }
+
+      if (guestItemsToMerge.length > 0) {
+        // Clear local storage and state immediately so we don't merge multiple times
+        try {
+          localStorage.removeItem('bb_guest_cart');
+        } catch {
+          // fallback
+        }
+        setDemoCart([]);
+
+        const isUuid = (id: string) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+        const mergeAll = async () => {
+          for (const item of guestItemsToMerge) {
+            try {
+              let targetVariantId = item.variantId;
+              if (!targetVariantId && item.product) {
+                if (Array.isArray(item.product.variants) && item.product.variants.length > 0) {
+                  for (const group of item.product.variants) {
+                    const selectedLabel = item.selectedVariants?.[group.name];
+                    if (selectedLabel) {
+                      const matchOpt = group.options.find(
+                        (opt) => opt.label === selectedLabel || opt.value === selectedLabel
+                      );
+                      if (matchOpt && isUuid(matchOpt.id)) {
+                        targetVariantId = matchOpt.id;
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (!targetVariantId && isUuid(item.productId)) {
+                  try {
+                    const variants = await cartApi.getProductVariants(item.productId);
+                    if (variants && variants.length > 0) {
+                      const match = variants.find((v) => {
+                        if (!v.attributes || typeof v.attributes !== 'object') return false;
+                        return Object.entries(item.selectedVariants || {}).every(
+                          ([k, val]) => String(v.attributes?.[k]) === String(val)
+                        );
+                      });
+                      targetVariantId = match?.id || variants[0]?.id;
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }
+                if (!targetVariantId && isUuid(item.productId)) {
+                  targetVariantId = item.productId;
+                }
+              }
+
+              if (targetVariantId) {
+                await cartApi.addToCart({
+                  variantId: targetVariantId,
+                  quantity: item.quantity,
+                });
+              }
+            } catch {
+              // Best-effort individual item merge
+            }
+          }
+        };
+
+        mergeAll()
+          .then(async () => {
+            if (isCancelled) return;
+            const res = await cartApi.getCart();
+            if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
+            const uiItems = res.items.map(mapBackendCartItemToUi);
+            setAuthCart(uiItems);
+            authCartRef.current = uiItems;
+            setAuthCartSubtotal(res.subtotalAmount);
+            setCartError(null);
+            setCartLoading(false);
+          })
+          .catch((err) => {
+            if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
+            setCartError(err instanceof Error ? err.message : 'Failed to synchronize cart with server');
+            setCartLoading(false);
+          });
+      } else {
+        cartApi
+          .getCart()
+          .then((res) => {
+            if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
+            const uiItems = res.items.map(mapBackendCartItemToUi);
+            setAuthCart(uiItems);
+            authCartRef.current = uiItems;
+            setAuthCartSubtotal(res.subtotalAmount);
+            setCartError(null);
+            setCartLoading(false);
+          })
+          .catch((err) => {
+            if (isCancelled || currentReqId !== cartRequestIdRef.current) return;
+            setCartError(err instanceof Error ? err.message : 'Failed to load cart from server');
+            setCartLoading(false);
+          });
+      }
     }
 
     return () => {

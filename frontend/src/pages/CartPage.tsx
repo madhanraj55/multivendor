@@ -18,6 +18,7 @@ export function CartPage() {
     cartSubtotal,
     toggleWishlist,
     isInWishlist,
+    authMode,
   } = useMarketplace();
 
   const { navigate } = useRouter();
@@ -400,15 +401,38 @@ export function CartPage() {
             </div>
           )}
 
+          {authMode !== 'AUTHENTICATED' && (
+            <div
+              style={{
+                padding: '0.65rem 0.85rem',
+                margin: '0.75rem 0',
+                borderRadius: '6px',
+                backgroundColor: '#eff6ff',
+                color: '#1e40af',
+                fontSize: '0.825rem',
+                border: '1px solid #bfdbfe',
+                lineHeight: 1.4,
+              }}
+            >
+              🔒 <strong>Sign-in required:</strong> Sign in or create an account to select your delivery address and complete checkout.
+            </div>
+          )}
+
           {/* Proceed to checkout CTA */}
           <button
             type="button"
             className="bb-btn bb-btn-primary bb-btn-lg bb-btn-block"
-            onClick={() => navigate('/checkout')}
+            onClick={() => {
+              if (authMode !== 'AUTHENTICATED') {
+                navigate('/login?redirect=/checkout');
+              } else {
+                navigate('/checkout');
+              }
+            }}
             disabled={hasUnavailableItems}
             title={hasUnavailableItems ? 'Remove out-of-stock items to proceed' : 'Proceed to Checkout'}
           >
-            Proceed to Checkout →
+            {authMode !== 'AUTHENTICATED' ? 'Sign In & Proceed to Checkout →' : 'Proceed to Checkout →'}
           </button>
         </aside>
       </div>

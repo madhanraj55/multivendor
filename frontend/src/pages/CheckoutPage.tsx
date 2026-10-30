@@ -182,6 +182,32 @@ export function CheckoutPage() {
     };
   }, [authMode, navigate, recordOrder]);
 
+  // If customer is not authenticated, redirect to login with redirect parameter
+  useEffect(() => {
+    if (authMode !== 'AUTHENTICATED') {
+      navigate('/login?redirect=/checkout');
+    }
+  }, [authMode, navigate]);
+
+  if (authMode !== 'AUTHENTICATED') {
+    return (
+      <div className="bb-container bb-checkout-container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔒</div>
+        <h2>Sign In Required to Complete Order</h2>
+        <p style={{ color: '#6b7280', maxWidth: '480px', margin: '0.5rem auto 1.5rem' }}>
+          Please sign in or create an account to choose your delivery address and confirm your order.
+        </p>
+        <button
+          type="button"
+          className="bb-btn bb-btn-primary"
+          onClick={() => navigate('/login?redirect=/checkout')}
+        >
+          Sign In or Register →
+        </button>
+      </div>
+    );
+  }
+
   if (isRecovering) {
     return (
       <div className="bb-container bb-checkout-container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
@@ -275,9 +301,9 @@ export function CheckoutPage() {
         setCheckoutAttempt(null);
         navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
       } else {
-        // Demo Mode order placement
-        const createdOrder = await placeOrder(orderNotes.trim() || undefined, undefined, paymentMethod);
-        navigate(`/orders?orderId=${createdOrder.orderNumber || createdOrder.id}`);
+        // Customer must authenticate before placing an order
+        navigate('/login?redirect=/checkout');
+        return;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to place order';

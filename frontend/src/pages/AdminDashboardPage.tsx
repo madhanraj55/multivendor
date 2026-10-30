@@ -411,7 +411,7 @@ export function AdminDashboardPage() {
                   className="bb-btn bb-btn-primary"
                   disabled={pricingSaving}
                 >
-                  {pricingSaving ? 'Saving Settings...' : '💾 Save Pricing Rules'}
+                  {pricingSaving ? 'Saving Settings...' : 'Save Pricing Rules'}
                 </button>
               </div>
             </form>
@@ -422,7 +422,7 @@ export function AdminDashboardPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  📦 Recent Customer Orders
+                   Recent Customer Orders
                 </h2>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
                   Latest orders placed across the BharatBazaar multi-vendor platform.

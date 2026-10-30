@@ -46,9 +46,6 @@ export function CategoryStrip() {
         <div className="bb-section-header">
           <div className="bb-section-title-wrap">
             <h2 className="bb-section-title">Shop by Category</h2>
-            <p className="bb-section-subtitle">
-              Browse top products sourced directly from trusted Indian makers
-            </p>
           </div>
           <button
             type="button"

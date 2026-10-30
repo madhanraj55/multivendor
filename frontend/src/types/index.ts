@@ -101,11 +101,24 @@ export interface OrderItem {
   selectedVariants?: Record<string, string>;
 }
 
+export type PackageStatus =
+  | 'PENDING_PAYMENT'
+  | 'PLACED'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'PACKED'
+  | 'SHIPPED'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'CANCELLED'
+  | 'RETURN_REQUESTED'
+  | 'RETURNED';
+
 export interface OrderPackage {
   sellerId: string;
   sellerName: string;
   trackingNumber: string;
-  packageStatus: 'PENDING_PAYMENT' | 'PROCESSING' | 'SHIPPED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+  packageStatus: PackageStatus;
   estimatedDelivery: string;
   items: OrderItem[];
 }
@@ -115,6 +128,7 @@ export type OrderStatus =
   | 'PLACED'
   | 'CONFIRMED'
   | 'PROCESSING'
+  | 'PACKED'
   | 'PARTIALLY_SHIPPED'
   | 'SHIPPED'
   | 'OUT_FOR_DELIVERY'
