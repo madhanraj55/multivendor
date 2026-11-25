@@ -84,6 +84,15 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
     setTimeout(() => setAddedMessage(false), 2500);
   };
 
+  const handleBuyNow = () => {
+    if (!product) return;
+    addToCart(product, quantity, selectedVariants);
+    navigate('/checkout');
+  };
+
+  const formatPrice = (val: number) =>
+    val.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(val) ? 0 : 2, maximumFractionDigits: 2 });
+
   if (loading) {
     return (
       <div className="bb-container bb-pdp-container" style={{ textAlign: 'center', padding: '100px 0' }}>
@@ -137,71 +146,81 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
       </nav>
 
       {/* Main PDP Grid */}
-      <div className="bb-pdp-layout">
-        {/* Left Column: Image Gallery */}
-        <div className="bb-pdp-gallery">
-          <div className="bb-pdp-main-image-wrap">
-            <img
-              src={product.images[selectedImageIndex] || product.thumbnail}
-              alt={product.title}
-              className="bb-pdp-main-image"
-            />
-            {product.badge && (
-              <span className="bb-product-badge">{product.badge}</span>
-            )}
-          </div>
-
-          {/* Thumbnail Strip */}
+      <div className="bb-pdp-main-grid">
+        {/* Left Column: Sticky Image Gallery (Vertical Thumbnails + Main Showcase) */}
+        <div className="bb-gallery-wrap">
           {product.images.length > 1 && (
-            <div className="bb-pdp-thumbnails">
+            <div className="bb-gallery-thumbs">
               {product.images.map((img: string, idx: number) => (
                 <button
                   type="button"
                   key={idx}
-                  className={`bb-pdp-thumb-btn ${selectedImageIndex === idx ? 'active' : ''}`}
+                  className={`bb-gallery-thumb-btn ${selectedImageIndex === idx ? 'active' : ''}`}
                   onClick={() => setSelectedImageIndex(idx)}
+                  aria-label={`View image ${idx + 1}`}
                 >
-                  <img src={img} alt={`Thumbnail ${idx + 1}`} className="bb-pdp-thumb-img" />
+                  <img src={img} alt={`Thumbnail ${idx + 1}`} className="bb-gallery-thumb-img" />
                 </button>
               ))}
             </div>
           )}
+
+          <div className="bb-gallery-main">
+            <img
+              src={product.images[selectedImageIndex] || product.thumbnail}
+              alt={product.title}
+              className="bb-gallery-main-img"
+            />
+            {product.badge && (
+              <span className="bb-gallery-badge">{product.badge}</span>
+            )}
+          </div>
         </div>
 
         {/* Right Column: Product Info & Buy Box */}
         <div className="bb-pdp-info">
-          {/* Brand & Title */}
-          <div className="bb-pdp-brand-row">
-            <span className="bb-pdp-brand">{product.brand || 'Verified Seller'}</span>
+          {/* Brand & Verified Badge */}
+          <div className="bb-pdp-header-row">
+            <span className="bb-pdp-brand">{product.brand || 'Verified Brand'}</span>
             <span className="bb-badge bb-badge-primary">✓ Verified Merchant</span>
           </div>
 
           <h1 className="bb-pdp-title">{product.title}</h1>
 
-          {/* Seller Attribution Card */}
-          <div className="bb-pdp-seller-strip">
-            <span>Sold by: </span>
-            <button
-              type="button"
-              className="bb-pdp-seller-link"
-              onClick={() => navigate(`/products?seller=${product.sellerId}`)}
-            >
-              <strong>{product.sellerName}</strong>
-            </button>
-            <span className="bb-pdp-seller-rating">★ {product.sellerRating} / 5.0</span>
+          {/* Rating & Seller Strip */}
+          <div className="bb-pdp-meta-row">
+            <span className="bb-pdp-rating-pill">
+              ★ {product.sellerRating || '4.9'}
+            </span>
+            <span className="bb-pdp-seller-inline">
+              Sold by:
+              <button
+                type="button"
+                className="bb-pdp-seller-link"
+                onClick={() => navigate(`/products?seller=${product.sellerId}`)}
+              >
+                {product.sellerName}
+              </button>
+            </span>
           </div>
 
           {/* Pricing Block */}
-          <div className="bb-pdp-price-block">
-            <div className="bb-pdp-price-main">
-              <span className="bb-pdp-currency">₹</span>
-              <span className="bb-pdp-price-amount">{product.price.toLocaleString('en-IN')}</span>
+          <div className="bb-pdp-pricing-box">
+            <div className="bb-pdp-price-primary">
+              <span className="bb-pdp-curr-price">₹{formatPrice(product.price)}</span>
+              {product.originalPrice > product.price && (
+                <span className="bb-pdp-discount-badge">
+                  {product.discountPercent}% OFF
+                </span>
+              )}
             </div>
             {product.originalPrice > product.price && (
               <div className="bb-pdp-mrp-row">
-                <span className="bb-pdp-mrp-label">M.R.P.:</span>
-                <span className="bb-pdp-original-price">₹{product.originalPrice.toLocaleString('en-IN')}</span>
-                <span className="bb-pdp-discount">({product.discountPercent}% OFF)</span>
+                <span>M.R.P.:</span>
+                <span className="bb-pdp-mrp">₹{formatPrice(product.originalPrice)}</span>
+                <span className="bb-pdp-savings">
+                  (You save ₹{formatPrice(product.originalPrice - product.price)})
+                </span>
               </div>
             )}
             {/* [GST Disabled for Non-GST Launch] <span className="bb-pdp-tax-note">Inclusive of all applicable GST & taxes</span> */}
@@ -210,7 +229,9 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
           {/* In-Stock Indicator */}
           <div className="bb-pdp-stock-status">
             {product.inStock ? (
-              <span className="bb-badge bb-badge-success">● In Stock ({product.stockQuantity} available)</span>
+              <span className="bb-badge bb-badge-success">
+                ● In Stock ({product.stockQuantity} available)
+              </span>
             ) : (
               <span className="bb-badge bb-badge-danger">● Currently Out of Stock</span>
             )}
@@ -218,20 +239,20 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
 
           {/* Variant Selector */}
           {product.variants && product.variants.length > 0 && (
-            <div className="bb-pdp-variants-section">
+            <div className="bb-variant-section">
               {product.variants.map((group: ProductVariantGroup) => (
-                <div key={group.name} className="bb-pdp-variant-group">
-                  <span className="bb-pdp-variant-title">
+                <div key={group.name} className="bb-variant-group">
+                  <span className="bb-variant-title">
                     Select {group.name}: <strong>{selectedVariants[group.name]}</strong>
                   </span>
-                  <div className="bb-pdp-variant-options">
+                  <div className="bb-variant-options">
                     {group.options.map((opt: ProductVariantOption) => {
                       const isSelected = selectedVariants[group.name] === opt.label;
                       return (
                         <button
                           type="button"
                           key={opt.label}
-                          className={`bb-pdp-variant-btn ${isSelected ? 'active' : ''} ${!opt.inStock ? 'out-of-stock' : ''}`}
+                          className={`bb-variant-btn ${isSelected ? 'active' : ''}`}
                           onClick={() => handleVariantSelect(group.name, opt.label)}
                           disabled={!opt.inStock}
                         >
@@ -245,7 +266,7 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
             </div>
           )}
 
-          {/* Quantity and Actions */}
+          {/* Quantity and Action CTAs (Add to Cart, Buy Now, Wishlist) */}
           <div className="bb-pdp-actions-row">
             <div className="bb-qty-selector">
               <label htmlFor="bb-qty-input" className="bb-qty-label">Qty:</label>
@@ -254,18 +275,21 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
                 className="bb-qty-select"
                 value={quantity}
                 onChange={(e) => setQuantity(Number(e.target.value))}
+                disabled={!product.inStock}
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((q) => (
-                  <option key={q} value={q}>
-                    {q}
-                  </option>
-                ))}
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                  .filter((q) => q <= Math.max(1, product.stockQuantity))
+                  .map((q) => (
+                    <option key={q} value={q}>
+                      {q}
+                    </option>
+                  ))}
               </select>
             </div>
 
             <button
               type="button"
-              className="bb-btn bb-btn-primary bb-btn-lg bb-pdp-add-btn"
+              className="bb-btn bb-btn-primary bb-pdp-add-btn"
               onClick={handleAddToCart}
               disabled={!product.inStock}
             >
@@ -274,11 +298,21 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
 
             <button
               type="button"
-              className={`bb-btn bb-btn-outline bb-btn-lg bb-pdp-wish-btn ${wishlisted ? 'active' : ''}`}
+              className="bb-pdp-buy-btn"
+              onClick={handleBuyNow}
+              disabled={!product.inStock}
+            >
+              ⚡ Buy Now
+            </button>
+
+            <button
+              type="button"
+              className={`bb-pdp-wishlist-toggle ${wishlisted ? 'active' : ''}`}
               onClick={() => toggleWishlist(product.id)}
               aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+              title={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
             >
-              {wishlisted ? '♥ Saved' : '♡ Wishlist'}
+              {wishlisted ? '♥' : '♡'}
             </button>
           </div>
 
@@ -287,6 +321,26 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
               ✓ Added {quantity} item(s) to your cart!
             </div>
           )}
+
+          {/* Marketplace Trust & Service Highlights */}
+          <div className="bb-pdp-highlights-grid">
+            <div className="bb-pdp-highlight-badge">
+              <span className="bb-pdp-highlight-badge-icon">🚚</span>
+              <span>Tracked Delivery</span>
+            </div>
+            <div className="bb-pdp-highlight-badge">
+              <span className="bb-pdp-highlight-badge-icon">↩️</span>
+              <span>7-Day Returns</span>
+            </div>
+            <div className="bb-pdp-highlight-badge">
+              <span className="bb-pdp-highlight-badge-icon">💵</span>
+              <span>COD Available</span>
+            </div>
+            <div className="bb-pdp-highlight-badge">
+              <span className="bb-pdp-highlight-badge-icon">🛡️</span>
+              <span>Buyer Protection</span>
+            </div>
+          </div>
 
           {/* PIN code Serviceability Checker */}
           <div className="bb-pdp-pincode-card">
@@ -313,8 +367,8 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
         </div>
       </div>
 
-      {/* Tabs: Description, Specs, Seller */}
-      <div className="bb-pdp-tabs-container">
+      {/* Tabs: Description, Specifications, Seller */}
+      <div className="bb-pdp-tabs-card">
         <div className="bb-pdp-tab-headers" role="tablist">
           <button
             type="button"
@@ -324,6 +378,15 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
             onClick={() => setActiveTab('description')}
           >
             Product Description
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'specs'}
+            className={`bb-pdp-tab-btn ${activeTab === 'specs' ? 'active' : ''}`}
+            onClick={() => setActiveTab('specs')}
+          >
+            Specifications
           </button>
           <button
             type="button"
@@ -344,14 +407,44 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
           </div>
         )}
 
+        {activeTab === 'specs' && (
+          <div>
+            <table className="bb-pdp-specs-table">
+              <tbody>
+                <tr>
+                  <th>Brand</th>
+                  <td>{product.brand || 'BharatBazaar Verified'}</td>
+                </tr>
+                <tr>
+                  <th>Category</th>
+                  <td>{product.category || 'Marketplace'}</td>
+                </tr>
+                <tr>
+                  <th>Availability</th>
+                  <td>{product.inStock ? `In Stock (${product.stockQuantity} units)` : 'Out of Stock'}</td>
+                </tr>
+                <tr>
+                  <th>Return Policy</th>
+                  <td>7 Days Easy Return</td>
+                </tr>
+                <tr>
+                  <th>Sold By</th>
+                  <td>{product.sellerName}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {activeTab === 'seller' && (
           <div>
-            <h4>Seller Information:</h4>
+            <h4>Seller Information</h4>
             <p className="bb-pdp-seller-detail-text">
               <strong>Merchant Name:</strong> {product.sellerName} <br />
+              <strong>Merchant Rating:</strong> ★ {product.sellerRating || '4.9'} / 5.0 <br />
               <strong>Marketplace Status:</strong> Verified Merchant
             </p>
-            <h4>Standard Marketplace Guarantee:</h4>
+            <h4>Standard Marketplace Guarantee</h4>
             <p className="bb-pdp-guarantee-text">
               All purchases made through BharatBazaar are safeguarded by our Buyer Protection program.
               Eligible items can be returned within 7 days of delivery in original condition.
