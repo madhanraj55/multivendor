@@ -72,7 +72,7 @@ export function Footer() {
             <div className="bb-footer-brand-col">
               <span className="bb-footer-logo-text">BharatBazaar</span>
               <p className="bb-footer-bio">
-                India’s premier multi-vendor storefront connecting discerning buyers with verified
+                India’s premier vendor storefront connecting discerning buyers with verified
                 independent artisans, direct manufacturers, and indigenous brands.
               </p>
               <div>
@@ -243,7 +243,8 @@ export function Footer() {
                     href="#seller-guidelines"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert('Seller Guidelines: All merchants must hold active GSTIN and MSME/Artisan credentials.');
+                      // [GST Disabled for Non-GST Launch] alert('Seller Guidelines: All merchants must hold active GSTIN and MSME/Artisan credentials.');
+                      alert('Seller Guidelines: Open to local artisans, home businesses, and independent merchants (No GSTIN required).');
                     }}
                     className="bb-footer-link"
                   >

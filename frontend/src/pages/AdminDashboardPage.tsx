@@ -103,7 +103,7 @@ export function AdminDashboardPage() {
           </div>
           <h1 className="bb-admin-header-title">Platform Operations Dashboard</h1>
           <p className="bb-admin-header-desc">
-            Real-time multi-vendor metrics, revenue aggregation from verified transactions, order volume, and pending merchant onboarding queues.
+            Real-time vendor metrics, revenue aggregation from verified transactions, order volume, and pending merchant onboarding queues.
           </p>
         </div>
         <div className="bb-admin-header-actions">
@@ -425,7 +425,7 @@ export function AdminDashboardPage() {
                    Recent Customer Orders
                 </h2>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
-                  Latest orders placed across the BharatBazaar multi-vendor platform.
+                  Latest orders placed across the BharatBazaar vendor platform.
                 </p>
               </div>
               <button

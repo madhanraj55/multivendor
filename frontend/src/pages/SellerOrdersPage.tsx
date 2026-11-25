@@ -545,7 +545,7 @@ export function SellerOrdersPage() {
               </div>
 
               <div className="bb-seller-isolation-note">
-                ⚡ Orders placed across multi-vendor checkouts are isolated to your shop items only.
+                ⚡ Orders placed across vendor checkouts are isolated to your shop items only.
               </div>
 
               <button
@@ -720,7 +720,7 @@ export function SellerOrdersPage() {
                           <th>SKU</th>
                           <th>Quantity</th>
                           <th>Unit Price</th>
-                          <th>Tax / GST</th>
+                          {/* [GST Disabled for Non-GST Launch] <th>Tax / GST</th> */}
                           <th>Total Amount</th>
                         </tr>
                       </thead>
@@ -740,7 +740,7 @@ export function SellerOrdersPage() {
                             <td className="bb-seller-field-value-mono">{it.sku || 'N/A'}</td>
                             <td>{it.quantity}</td>
                             <td>{formatCurrency(it.unitPrice)}</td>
-                            <td>{it.gstRate ? `${it.gstRate}%` : '0%'}</td>
+                            {/* [GST Disabled for Non-GST Launch] <td>{it.gstRate ? `${it.gstRate}%` : '0%'}</td> */}
                             <td className="bb-seller-field-value">{formatCurrency(it.totalAmount)}</td>
                           </tr>
                         ))}

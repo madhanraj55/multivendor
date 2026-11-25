@@ -141,7 +141,8 @@ export function AdminSellersPage() {
           </div>
           <h1 className="bb-admin-header-title">Merchant Shops & Verification</h1>
           <p className="bb-admin-header-desc">
-            Review vendor applications, verify GSTIN/PAN legal identifiers, and manage store operational status.
+            {/* [GST Disabled for Non-GST Launch] Review vendor applications, verify GSTIN/PAN legal identifiers, and manage store operational status. */}
+            Review vendor applications, verify shop credentials, and manage store operational status.
           </p>
         </div>
         <div className="bb-admin-header-actions">
@@ -242,7 +243,7 @@ export function AdminSellersPage() {
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-500)' }}>{shop.seller?.email}</div>
                   </td>
                   <td style={{ padding: '0.85rem 1rem', fontSize: '0.8rem' }}>
-                    <div>GST: <strong>{shop.gstin || 'None'}</strong></div>
+                    {/* [GST Disabled for Non-GST Launch] <div>GST: <strong>{shop.gstin || 'None'}</strong></div> */}
                     <div>PAN: <strong>{shop.pan || 'None'}</strong></div>
                   </td>
                   <td style={{ padding: '0.85rem 1rem' }}>
@@ -348,8 +349,8 @@ export function AdminSellersPage() {
               </div>
 
               <div style={{ background: 'var(--color-slate-50)', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem' }}>Tax & Legal Identifiers</div>
-                <div style={{ fontSize: '0.85rem' }}>GSTIN: <strong>{selectedShop.gstin || 'Not registered'}</strong></div>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem' }}>Legal Identifiers</div>
+                {/* [GST Disabled for Non-GST Launch] <div style={{ fontSize: '0.85rem' }}>GSTIN: <strong>{selectedShop.gstin || 'Not registered'}</strong></div> */}
                 <div style={{ fontSize: '0.85rem' }}>PAN: <strong>{selectedShop.pan || 'Not registered'}</strong></div>
                 {selectedShop.fssaiNumber && (
                   <div style={{ fontSize: '0.85rem' }}>FSSAI: <strong>{selectedShop.fssaiNumber}</strong></div>

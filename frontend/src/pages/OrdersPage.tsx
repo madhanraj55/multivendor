@@ -451,7 +451,7 @@ export function OrdersPage() {
                   </div>
                 </div>
 
-                {/* Multi-Vendor Sub-Order Stepper */}
+                {/* Vendor Sub-Order Stepper */}
                 {selectedOrder.packages.length > 1 && (
                   <div
                     className="bb-order-timeline"
@@ -716,7 +716,7 @@ export function OrdersPage() {
           <div>
             <h1 className="bb-plp-title">My Orders</h1>
             <p className="bb-section-subtitle">
-              Track customer deliveries, package details, and invoices from multi-vendor merchants
+              Track customer deliveries, package details, and invoices from vendor merchants
             </p>
           </div>
         </div>
@@ -732,7 +732,7 @@ export function OrdersPage() {
           <div>
             <h1 className="bb-plp-title">My Orders</h1>
             <p className="bb-section-subtitle">
-              Track customer deliveries, package details, and invoices from multi-vendor merchants
+              Track customer deliveries, package details, and invoices from vendor merchants
             </p>
           </div>
         </div>
@@ -759,7 +759,7 @@ export function OrdersPage() {
         <div>
           <h1 className="bb-plp-title">My Orders</h1>
           <p className="bb-section-subtitle">
-            Track customer deliveries, package details, and invoices from multi-vendor merchants
+            Track customer deliveries, package details, and invoices from vendor merchants
           </p>
         </div>
         <button

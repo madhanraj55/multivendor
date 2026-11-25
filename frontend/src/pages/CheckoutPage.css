@@ -110,7 +110,7 @@
   margin-bottom: var(--space-1);
 }
 
-/* Multi-vendor packages preview */
+/* Vendor packages preview */
 .bb-checkout-package {
   border: 1px solid var(--color-slate-100);
   background-color: var(--color-slate-50);

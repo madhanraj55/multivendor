@@ -82,7 +82,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
       {/* Body */}
       <div className="bb-product-content">
-        {/* Multi-Vendor Seller Row */}
+        {/* Vendor Seller Row */}
         <div className="bb-product-seller-row">
           <span className="bb-product-seller-name" title={`Store: ${product.sellerName}`}>
             🏬 {product.sellerName}

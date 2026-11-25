@@ -206,7 +206,7 @@ export function CartPage() {
       )}
 
       <div className="bb-cart-layout">
-        {/* Left Column: Multi-Vendor Packages */}
+        {/* Left Column: Vendor Packages */}
         <div className="bb-cart-left">
           {Object.entries(sellerGroups).map(([sellerId, group]: [string, { sellerName: string; items: CartItem[] }]) => (
             <div key={sellerId} className="bb-cart-seller-package">

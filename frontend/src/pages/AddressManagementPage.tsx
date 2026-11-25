@@ -153,7 +153,7 @@ export function AddressManagementPage() {
         <div>
           <h1 className="bb-plp-title">Saved Delivery Addresses</h1>
           <p className="bb-section-subtitle">
-            Manage your delivery destinations for multi-vendor parcels and shipments
+            Manage your delivery destinations for vendor parcels and shipments
           </p>
         </div>
         <button

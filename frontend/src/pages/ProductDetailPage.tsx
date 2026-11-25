@@ -204,7 +204,7 @@ export function ProductDetailPage({ productId }: ProductDetailPageProps) {
                 <span className="bb-pdp-discount">({product.discountPercent}% OFF)</span>
               </div>
             )}
-            <span className="bb-pdp-tax-note">Inclusive of all applicable GST & taxes</span>
+            {/* [GST Disabled for Non-GST Launch] <span className="bb-pdp-tax-note">Inclusive of all applicable GST & taxes</span> */}
           </div>
 
           {/* In-Stock Indicator */}

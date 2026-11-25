@@ -714,7 +714,7 @@ export function AdminOrdersPage() {
                                 <th>SKU</th>
                                 <th>Qty</th>
                                 <th>Unit Price</th>
-                                <th>GST</th>
+                                {/* [GST Disabled for Non-GST Launch] <th>GST</th> */}
                                 <th>Total</th>
                               </tr>
                             </thead>
@@ -734,7 +734,7 @@ export function AdminOrdersPage() {
                                   <td style={{ fontFamily: 'monospace' }}>{it.sku || 'N/A'}</td>
                                   <td>{it.quantity}</td>
                                   <td>{formatCurrency(it.unitPrice)}</td>
-                                  <td>{it.gstRate ? `${it.gstRate}%` : '0%'}</td>
+                                  {/* [GST Disabled for Non-GST Launch] <td>{it.gstRate ? `${it.gstRate}%` : '0%'}</td> */}
                                   <td style={{ fontWeight: 'var(--font-weight-bold)' }}>
                                     {formatCurrency(it.totalAmount)}
                                   </td>
@@ -753,10 +753,12 @@ export function AdminOrdersPage() {
                               <span style={{ color: 'var(--color-slate-500)' }}>Shipping Fee:</span>
                               <strong>{formatCurrency(pkg.shippingFee)}</strong>
                             </div>
+                            {/* [GST Disabled for Non-GST Launch]
                             <div className="bb-admin-pkg-financial-item">
                               <span style={{ color: 'var(--color-slate-500)' }}>Tax / GST:</span>
                               <strong>{formatCurrency(pkg.taxAmount)}</strong>
                             </div>
+                            */}
                             <div className="bb-admin-pkg-financial-item">
                               <span style={{ color: 'var(--color-slate-500)' }}>Total Package Amount:</span>
                               <strong style={{ color: 'var(--color-slate-900)' }}>

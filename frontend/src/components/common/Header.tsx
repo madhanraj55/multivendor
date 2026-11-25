@@ -380,7 +380,7 @@ export function Header() {
             <div className="bb-logo-icon">BB</div>
             <div className="bb-logo-text">
               <span className="bb-logo-title">BharatBazaar</span>
-              <span className="bb-logo-subtitle">Multi-Vendor Marketplace</span>
+              <span className="bb-logo-subtitle">Vendor Marketplace</span>
             </div>
           </a>
 

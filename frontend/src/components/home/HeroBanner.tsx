@@ -16,7 +16,7 @@ export function HeroBanner() {
           </h1>
           <p className="bb-hero-desc">
             Explore authentic audio tech, pure handloom silks, Ayurvedic skincare, and heritage cookware
-            with seamless multi-vendor checkout and trusted nationwide doorstep delivery.
+            with seamless vendor checkout and trusted nationwide doorstep delivery.
           </p>
           <div className="bb-hero-ctas">
             <button

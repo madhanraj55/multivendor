@@ -10,7 +10,7 @@ import type {
 
 /**
  * Maps a backend CartItem entity to the frontend UI CartItem model.
- * Preserves compatibility with existing CartPage layout, multi-vendor grouping, and summaries.
+ * Preserves compatibility with existing CartPage layout, vendor grouping, and summaries.
  */
 export function mapBackendCartItemToUi(item: BackendCartItem): CartItem {
   const p = item.product || { id: '', title: 'Product', slug: '', status: '', thumbnailUrl: null };

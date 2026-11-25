@@ -388,7 +388,7 @@ export function CheckoutPage() {
             </div>
           </section>
 
-          {/* Step 2: Multi-Vendor Dispatched Packages */}
+          {/* Step 2: Vendor Dispatched Packages */}
           <section className="bb-checkout-section" aria-labelledby="heading-order-packages">
             <div className="bb-checkout-section-header">
               <h2 id="heading-order-packages" className="bb-checkout-section-title">
@@ -668,7 +668,7 @@ export function CheckoutPage() {
             </div>
 
             <div className="bb-delivery-tax-disclaimer">
-              ℹ️ <strong>BharatBazaar Pricing Model:</strong> Customer product price = seller base price + admin commission. Distance delivery calculated per seller package. Platform fee (₹{platformFee}) is charged once per order regardless of multi-vendor split.
+              ℹ️ <strong>BharatBazaar Pricing Model:</strong> Customer product price = seller base price + admin commission. Distance delivery calculated per seller package. Platform fee (₹{platformFee}) is charged once per order regardless of vendor split.
             </div>
 
             <div className="bb-summary-row total-row">

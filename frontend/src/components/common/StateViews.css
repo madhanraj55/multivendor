@@ -99,6 +99,7 @@
   color: var(--color-slate-500);
   max-width: 440px;
   margin-bottom: var(--space-6);
+  display: none;
 }
 
 /* Error State Banner */

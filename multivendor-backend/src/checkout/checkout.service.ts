@@ -132,16 +132,19 @@ export class CheckoutService {
       const lineSubtotal = this.pricing.round(unitPrice * item.quantity);
       subtotalAmount = this.pricing.round(subtotalAmount + lineSubtotal);
 
+      // [GST Disabled for Non-GST Launch]
       // GST tax resolution (Product.gstRate -> Category.defaultGstRate -> null)
-      const rawGstRate =
-        product.gstRate ?? product.category?.defaultGstRate ?? null;
-      const gstRate = rawGstRate !== null ? Number(rawGstRate) : null;
-      const taxStatus: 'CONFIGURED' | 'UNCONFIGURED' =
-        gstRate !== null ? 'CONFIGURED' : 'UNCONFIGURED';
-
-      if (taxStatus === 'UNCONFIGURED') {
-        anyUnconfiguredTax = true;
-      }
+      // const rawGstRate =
+      //   product.gstRate ?? product.category?.defaultGstRate ?? null;
+      // const gstRate = rawGstRate !== null ? Number(rawGstRate) : null;
+      // const taxStatus: 'CONFIGURED' | 'UNCONFIGURED' =
+      //   gstRate !== null ? 'CONFIGURED' : 'UNCONFIGURED';
+      //
+      // if (taxStatus === 'UNCONFIGURED') {
+      //   anyUnconfiguredTax = true;
+      // }
+      const gstRate: number | null = null;
+      const taxStatus: 'CONFIGURED' | 'UNCONFIGURED' = 'CONFIGURED';
 
       // Check item eligibility & availability
       let isItemValid = true;
@@ -909,11 +912,13 @@ export class CheckoutService {
               deliveryType: 'SELLER_MANAGED',
               items: {
                 create: group.items.map((item) => {
-                  const rawGstRate =
-                    item.variant.product.gstRate ??
-                    item.variant.product.category?.defaultGstRate ??
-                    null;
-                  const gstRate = rawGstRate !== null ? Number(rawGstRate) : null;
+                  // [GST Disabled for Non-GST Launch]
+                  // const rawGstRate =
+                  //   item.variant.product.gstRate ??
+                  //   item.variant.product.category?.defaultGstRate ??
+                  //   null;
+                  // const gstRate = rawGstRate !== null ? Number(rawGstRate) : null;
+                  const gstRate: number | null = null;
 
                   const pkgItem = pkgPricing?.items?.find(
                     (pi: any) => pi.variantId === item.variantId,

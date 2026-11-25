@@ -20,7 +20,10 @@ export function ProductListingPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeCategory, setActiveCategory] = useState(selectedCategoryQuery);
+  const [activeCategories, setActiveCategories] = useState<string[]>(() => {
+    if (!selectedCategoryQuery || selectedCategoryQuery === 'all') return [];
+    return selectedCategoryQuery.split(',').map((s) => s.trim()).filter(Boolean);
+  });
   const [activeSeller, setActiveSeller] = useState(selectedSellerId);
   const [minPrice, setMinPrice] = useState<number>(0);
   const [maxPrice, setMaxPrice] = useState<number>(10000);
@@ -29,10 +32,31 @@ export function ProductListingPage() {
   const [sortBy, setSortBy] = useState('featured');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Sync state if query parameters change
+  // Sync state if query parameters change (and normalize slugs to category IDs once loaded)
   useEffect(() => {
-    setActiveCategory(queryParams.category || 'all');
-  }, [queryParams.category]);
+    const raw = queryParams.category;
+    if (!raw || raw === 'all') {
+      setActiveCategories([]);
+      return;
+    }
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (categories.length > 0) {
+      setActiveCategories(
+        parts.map((p) => {
+          const matched = categories.find((c) => c.id === p || c.slug === p);
+          return matched ? matched.id : p;
+        })
+      );
+    } else {
+      setActiveCategories(parts);
+    }
+  }, [queryParams.category, categories]);
+
+  const toggleCategory = (catId: string) => {
+    setActiveCategories((prev) =>
+      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
+    );
+  };
 
   useEffect(() => {
     setActiveSeller(queryParams.seller || 'all');
@@ -69,12 +93,13 @@ export function ProductListingPage() {
   // Compute filtered products
   const filteredProducts = useMemo(() => {
     return products.filter((product: Product) => {
-      // Category filter (match by id or slug)
-      if (activeCategory !== 'all') {
-        const catObj = categories.find((c) => c.id === activeCategory || c.slug === activeCategory);
-        if (catObj && product.categoryId !== catObj.id) {
-          return false;
-        } else if (!catObj && product.categoryId !== activeCategory) {
+      // Category filter (multi-select: match any selected category id or slug)
+      if (activeCategories.length > 0) {
+        const matchesAnyCategory = activeCategories.some((selected) => {
+          const catObj = categories.find((c) => c.id === selected || c.slug === selected);
+          return catObj ? product.categoryId === catObj.id : product.categoryId === selected;
+        });
+        if (!matchesAnyCategory) {
           return false;
         }
       }
@@ -101,7 +126,7 @@ export function ProductListingPage() {
 
       return true;
     });
-  }, [products, categories, activeCategory, activeSeller, minPrice, maxPrice, inStockOnly, minRating]);
+  }, [products, categories, activeCategories, activeSeller, minPrice, maxPrice, inStockOnly, minRating]);
 
   // Sort products
   const sortedProducts = useMemo(() => {
@@ -120,11 +145,16 @@ export function ProductListingPage() {
     }
   }, [filteredProducts, sortBy]);
 
-  const currentCategoryObj = categories.find((c) => c.id === activeCategory || c.slug === activeCategory);
+  const selectedCategoryObjects = useMemo(
+    () =>
+      categories.filter((c) => activeCategories.includes(c.id) || activeCategories.includes(c.slug)),
+    [categories, activeCategories]
+  );
+  const currentCategoryObj = selectedCategoryObjects.length === 1 ? selectedCategoryObjects[0] : undefined;
   const currentSellerObj = shops.find((s) => s.id === activeSeller);
 
   const clearAllFilters = () => {
-    setActiveCategory('all');
+    setActiveCategories([]);
     setActiveSeller('all');
     setMinPrice(0);
     setMaxPrice(10000);
@@ -145,7 +175,7 @@ export function ProductListingPage() {
         <button
           type="button"
           onClick={() => {
-            setActiveCategory('all');
+            setActiveCategories([]);
             setActiveSeller('all');
             navigate('/products');
           }}
@@ -153,10 +183,18 @@ export function ProductListingPage() {
         >
           All Products
         </button>
-        {currentCategoryObj && (
+        {selectedCategoryObjects.length === 1 && currentCategoryObj && (
           <>
             <span className="bb-breadcrumb-separator">›</span>
             <span className="bb-breadcrumb-current">{currentCategoryObj.name}</span>
+          </>
+        )}
+        {selectedCategoryObjects.length > 1 && (
+          <>
+            <span className="bb-breadcrumb-separator">›</span>
+            <span className="bb-breadcrumb-current">
+              {selectedCategoryObjects.map((c) => c.name).join(', ')}
+            </span>
           </>
         )}
         {currentSellerObj && (
@@ -173,8 +211,10 @@ export function ProductListingPage() {
           <h1 className="bb-plp-title">
             {searchQuery
               ? `Search Results for "${searchQuery}"`
-              : currentCategoryObj
+              : selectedCategoryObjects.length === 1 && currentCategoryObj
               ? currentCategoryObj.name
+              : selectedCategoryObjects.length > 1
+              ? selectedCategoryObjects.map((c) => c.name).join(' & ')
               : currentSellerObj
               ? `Products from ${currentSellerObj.name}`
               : 'All Marketplace Products'}
@@ -226,27 +266,25 @@ export function ProductListingPage() {
             </button>
           </div>
 
-          {/* Categories Filter */}
+          {/* Categories Filter (Multi-select) */}
           {categories.length > 0 && (
             <div className="bb-filter-group">
               <span className="bb-filter-group-title">Category</span>
               <div className="bb-filter-list">
                 <label className="bb-filter-label">
                   <input
-                    type="radio"
-                    name="catFilter"
-                    checked={activeCategory === 'all'}
-                    onChange={() => setActiveCategory('all')}
+                    type="checkbox"
+                    checked={activeCategories.length === 0}
+                    onChange={() => setActiveCategories([])}
                   />
                   All Categories
                 </label>
                 {categories.map((cat) => (
                   <label key={cat.id} className="bb-filter-label">
                     <input
-                      type="radio"
-                      name="catFilter"
-                      checked={activeCategory === cat.id || activeCategory === cat.slug}
-                      onChange={() => setActiveCategory(cat.id)}
+                      type="checkbox"
+                      checked={activeCategories.includes(cat.id) || activeCategories.includes(cat.slug)}
+                      onChange={() => toggleCategory(cat.id)}
                     />
                     {cat.name}
                   </label>
@@ -255,7 +293,7 @@ export function ProductListingPage() {
             </div>
           )}
 
-          {/* Verified Multi-Vendor Filter */}
+          {/* Verified Vendor Filter */}
           {shops.length > 0 && (
             <div className="bb-filter-group">
               <span className="bb-filter-group-title">Filter by Seller</span>
