@@ -1,6 +1,9 @@
 {
-  "globalCommissionPercentage": 10,
-  "platformFee": 3,
+  "globalCommissionPercentage": 6,
+  "platformFeeEnabled": true,
+  "platformFee": 0,
+  "deliveryChargeEnabled": true,
+  "flatDeliveryFee": 50,
   "deliveryRules": {
     "tiers": [
       {

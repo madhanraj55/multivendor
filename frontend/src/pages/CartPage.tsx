@@ -51,7 +51,11 @@ export function CartPage() {
 
   const packageCount = Object.keys(sellerGroups).length;
   const platformFee = cart.length > 0 ? (pricingSettings?.platformFee ?? 3) : 0;
-  const estimatedShipping = cart.length > 0 ? packageCount * (pricingSettings?.deliveryRules?.fallbackLocalFee ?? 40) : 0;
+  const perPackageDeliveryFee =
+    pricingSettings?.deliveryChargeEnabled === false
+      ? 0
+      : (pricingSettings?.flatDeliveryFee ?? pricingSettings?.deliveryRules?.fallbackLocalFee ?? 40);
+  const estimatedShipping = cart.length > 0 ? packageCount * perPackageDeliveryFee : 0;
   const grandTotal = Math.max(0, cartSubtotal + estimatedShipping + platformFee - couponDiscount);
 
   // Check if any cart item is unavailable or out of stock
@@ -341,10 +345,12 @@ export function CartPage() {
               </span>
             </div>
 
-            <div className="bb-summary-row">
-              <span>Platform Fee</span>
-              <span>₹{platformFee}</span>
-            </div>
+            {platformFee > 0 && (
+              <div className="bb-summary-row">
+                <span>Platform Fee</span>
+                <span>₹{platformFee}</span>
+              </div>
+            )}
 
             {couponDiscount > 0 && (
               <div className="bb-summary-row">

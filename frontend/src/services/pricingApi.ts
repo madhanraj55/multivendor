@@ -14,8 +14,11 @@ export interface DeliveryRules {
 
 export interface PricingSettings {
   globalCommissionPercentage: number;
+  platformFeeEnabled?: boolean;
   platformFee: number;
-  deliveryRules: DeliveryRules;
+  deliveryChargeEnabled?: boolean;
+  flatDeliveryFee?: number | null;
+  deliveryRules?: DeliveryRules;
 }
 
 export interface ItemPricingPreview {

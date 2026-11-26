@@ -540,13 +540,19 @@ export function OrdersPage() {
                 <span>₹{selectedOrder.itemsSubtotal.toLocaleString('en-IN')}</span>
               </div>
               <div className="bb-price-breakdown-row">
-                <span>Distance Delivery Fee</span>
-                <span>₹{selectedOrder.estimatedShippingFee}</span>
+                <span>Delivery Fee</span>
+                <span>
+                  {selectedOrder.estimatedShippingFee === 0
+                    ? 'FREE'
+                    : `₹${selectedOrder.estimatedShippingFee}`}
+                </span>
               </div>
-              <div className="bb-price-breakdown-row">
-                <span>Platform Fee</span>
-                <span>₹{selectedOrder.platformFee ?? 3}</span>
-              </div>
+              {(selectedOrder.platformFee ?? 0) > 0 && (
+                <div className="bb-price-breakdown-row">
+                  <span>Platform Fee</span>
+                  <span>₹{selectedOrder.platformFee}</span>
+                </div>
+              )}
               {selectedOrder.discount > 0 && (
                 <div className="bb-price-breakdown-row discount">
                   <span>Discounts Applied</span>

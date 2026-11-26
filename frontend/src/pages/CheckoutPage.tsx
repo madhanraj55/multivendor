@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext.tsx';
 import { useRouter } from '../context/RouterContext.tsx';
 import { EmptyState } from '../components/common/StateViews.tsx';
+import { pricingApi, type PricingSettings } from '../services/pricingApi.ts';
 import type { CartItem, CheckoutValidationResponse, BackendCheckoutAttempt } from '../types/index.ts';
 import {
   checkoutApi,
@@ -44,6 +45,11 @@ export function CheckoutPage() {
   const [checkoutAttempt, setCheckoutAttempt] = useState<BackendCheckoutAttempt | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reservationExpired, setReservationExpired] = useState(false);
+  const [pricingSettings, setPricingSettings] = useState<PricingSettings | null>(null);
+
+  useEffect(() => {
+    pricingApi.getPublicSettings().then(setPricingSettings).catch(() => {});
+  }, []);
 
   // Reservation idempotency key: maintained across retries for the same logical checkout,
   // and reset when cart, selected address, user session, or reservation expiry occurs.
@@ -242,8 +248,15 @@ export function CheckoutPage() {
       : cartSubtotal;
 
   const packageCount = Object.keys(sellerGroups).length;
-  const platformFee = validationResult?.platformFee ?? 3;
-  const deliveryFee = packageCount * 40;
+  const platformFee =
+    pricingSettings?.platformFeeEnabled === false
+      ? 0
+      : (validationResult?.platformFee ?? pricingSettings?.platformFee ?? 3);
+  const perPackageDeliveryFee =
+    pricingSettings?.deliveryChargeEnabled === false
+      ? 0
+      : (pricingSettings?.flatDeliveryFee ?? pricingSettings?.deliveryRules?.fallbackLocalFee ?? 40);
+  const deliveryFee = packageCount * perPackageDeliveryFee;
   const grandTotal = authoritativeSubtotal + deliveryFee + platformFee;
 
   const handlePlaceOrder = async () => {
@@ -658,17 +671,25 @@ export function CheckoutPage() {
             </div>
 
             <div className="bb-summary-row">
-              <span>Distance Delivery Fee ({packageCount} {packageCount === 1 ? 'Package' : 'Packages'})</span>
-              <span>₹{deliveryFee.toLocaleString('en-IN')}</span>
+              <span>Delivery Fee ({packageCount} {packageCount === 1 ? 'Package' : 'Packages'})</span>
+              <span>
+                {deliveryFee === 0 ? (
+                  <span style={{ color: '#15803d', fontWeight: 700 }}>FREE</span>
+                ) : (
+                  `₹${deliveryFee.toLocaleString('en-IN')}`
+                )}
+              </span>
             </div>
 
-            <div className="bb-summary-row">
-              <span>Platform Fee</span>
-              <span>₹{platformFee.toLocaleString('en-IN')}</span>
-            </div>
+            {platformFee > 0 && (
+              <div className="bb-summary-row">
+                <span>Platform Fee</span>
+                <span>₹{platformFee.toLocaleString('en-IN')}</span>
+              </div>
+            )}
 
             <div className="bb-delivery-tax-disclaimer">
-              ℹ️ <strong>BharatBazaar Pricing Model:</strong> Customer product price = seller base price + admin commission. Distance delivery calculated per seller package. Platform fee (₹{platformFee}) is charged once per order regardless of vendor split.
+              ℹ️ <strong>BharatBazaar Pricing Model:</strong> Customer product price = seller base price + admin commission. Delivery fee calculated per seller package.{platformFee > 0 ? ` Platform fee (₹${platformFee}) is charged once per order regardless of vendor split.` : ''}
             </div>
 
             <div className="bb-summary-row total-row">

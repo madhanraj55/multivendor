@@ -17,8 +17,11 @@ export class PricingService {
   private readonly settingsFilePath = join(process.cwd(), 'data', 'pricing-settings.json');
 
   private settings: PricingSettings = {
-    globalCommissionPercentage: 15, // Default 10%
+    globalCommissionPercentage: 15, // Default 15%
+    platformFeeEnabled: true,
     platformFee: 3, // Default fixed ₹3 per order
+    deliveryChargeEnabled: true,
+    flatDeliveryFee: 40,
     deliveryRules: {
       tiers: [
         { maxKm: 5, fee: 30 },
@@ -47,10 +50,22 @@ export class PricingService {
             typeof parsed.globalCommissionPercentage === 'number'
               ? parsed.globalCommissionPercentage
               : this.settings.globalCommissionPercentage,
+          platformFeeEnabled:
+            typeof parsed.platformFeeEnabled === 'boolean'
+              ? parsed.platformFeeEnabled
+              : this.settings.platformFeeEnabled,
           platformFee:
             typeof parsed.platformFee === 'number'
               ? parsed.platformFee
               : this.settings.platformFee,
+          deliveryChargeEnabled:
+            typeof parsed.deliveryChargeEnabled === 'boolean'
+              ? parsed.deliveryChargeEnabled
+              : this.settings.deliveryChargeEnabled,
+          flatDeliveryFee:
+            parsed.flatDeliveryFee === null || typeof parsed.flatDeliveryFee === 'number'
+              ? parsed.flatDeliveryFee
+              : this.settings.flatDeliveryFee,
           deliveryRules: {
             ...this.settings.deliveryRules,
             ...(parsed.deliveryRules || {}),
@@ -81,13 +96,30 @@ export class PricingService {
     return JSON.parse(JSON.stringify(this.settings));
   }
 
+  getEffectivePlatformFee(): number {
+    return this.settings.platformFeeEnabled ? this.settings.platformFee : 0;
+  }
+
   updateSettings(dto: UpdatePricingSettingsDto): PricingSettings {
     if (dto.globalCommissionPercentage !== undefined) {
       this.settings.globalCommissionPercentage = this.round(dto.globalCommissionPercentage);
     }
 
+    if (dto.platformFeeEnabled !== undefined) {
+      this.settings.platformFeeEnabled = Boolean(dto.platformFeeEnabled);
+    }
+
     if (dto.platformFee !== undefined) {
       this.settings.platformFee = this.round(dto.platformFee);
+    }
+
+    if (dto.deliveryChargeEnabled !== undefined) {
+      this.settings.deliveryChargeEnabled = Boolean(dto.deliveryChargeEnabled);
+    }
+
+    if (dto.flatDeliveryFee !== undefined) {
+      this.settings.flatDeliveryFee =
+        dto.flatDeliveryFee === null ? null : this.round(dto.flatDeliveryFee);
     }
 
     if (dto.deliveryRules) {
@@ -240,6 +272,14 @@ export class PricingService {
     origin?: AddressCoordinates | null,
     destination?: AddressCoordinates | null,
   ): number {
+    if (!this.settings.deliveryChargeEnabled) {
+      return 0;
+    }
+
+    if (this.settings.flatDeliveryFee !== undefined && this.settings.flatDeliveryFee !== null) {
+      return this.round(this.settings.flatDeliveryFee);
+    }
+
     const rules = this.settings.deliveryRules;
 
     if (isEstimated && rules.fallbackLocalFee !== undefined) {
@@ -293,7 +333,7 @@ export class PricingService {
   ): OrderPricingCalculation {
     let orderSubtotal = 0;
     let orderShippingFee = 0;
-    const platformFee = this.settings.platformFee;
+    const platformFee = this.getEffectivePlatformFee();
     const packages: PackagePricingCalculation[] = [];
 
     for (const group of sellerGroups) {

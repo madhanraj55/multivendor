@@ -39,7 +39,10 @@ export class PricingController {
     const settings = this.pricingService.getSettings();
     return {
       globalCommissionPercentage: settings.globalCommissionPercentage,
-      platformFee: settings.platformFee,
+      platformFeeEnabled: settings.platformFeeEnabled,
+      platformFee: settings.platformFeeEnabled ? settings.platformFee : 0,
+      deliveryChargeEnabled: settings.deliveryChargeEnabled,
+      flatDeliveryFee: settings.deliveryChargeEnabled ? (settings.flatDeliveryFee ?? 40) : 0,
       deliveryRules: settings.deliveryRules,
     };
   }

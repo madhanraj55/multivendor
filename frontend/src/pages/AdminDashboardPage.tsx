@@ -12,14 +12,24 @@ import './AdminOrdersPage.css';
 
 export function AdminDashboardPage() {
   const { authUser, authMode } = useMarketplace();
-  const { navigate } = useRouter();
+  const { navigate, queryParams } = useRouter();
+  const activeSection = queryParams.section;
+  const activeNavModule =
+    activeSection === 'pricing'
+      ? 'pricing'
+      : activeSection === 'recent-orders'
+      ? 'recent-orders'
+      : 'dashboard';
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AdminDashboardSummaryResponse | null>(null);
   const [_pricingSettings, setPricingSettings] = useState<PricingSettings | null>(null);
-  const [commRate, setCommRate] = useState<string>('10');
+  const [commRate, setCommRate] = useState<string>('15');
+  const [platformFeeEnabled, setPlatformFeeEnabled] = useState<boolean>(true);
   const [platformFeeInput, setPlatformFeeInput] = useState<string>('3');
+  const [deliveryChargeEnabled, setDeliveryChargeEnabled] = useState<boolean>(true);
+  const [flatDeliveryFeeInput, setFlatDeliveryFeeInput] = useState<string>('40');
   const [pricingSaving, setPricingSaving] = useState<boolean>(false);
   const [pricingNotice, setPricingNotice] = useState<string | null>(null);
 
@@ -33,7 +43,10 @@ export function AdminDashboardPage() {
         const pSettings = await pricingApi.getAdminPricingSettings();
         setPricingSettings(pSettings);
         setCommRate(String(pSettings.globalCommissionPercentage));
+        setPlatformFeeEnabled(pSettings.platformFeeEnabled ?? true);
         setPlatformFeeInput(String(pSettings.platformFee));
+        setDeliveryChargeEnabled(pSettings.deliveryChargeEnabled ?? true);
+        setFlatDeliveryFeeInput(String(pSettings.flatDeliveryFee ?? 40));
       } catch (pErr) {
         console.warn('Failed to load pricing settings:', pErr);
       }
@@ -50,6 +63,22 @@ export function AdminDashboardPage() {
       fetchSummary();
     }
   }, [authMode, authUser?.role]);
+
+  useEffect(() => {
+    if (!loading && activeSection) {
+      const targetId =
+        activeSection === 'pricing'
+          ? 'admin-pricing-section'
+          : activeSection === 'recent-orders'
+          ? 'admin-recent-orders-section'
+          : null;
+      if (targetId) {
+        setTimeout(() => {
+          document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
+      }
+    }
+  }, [loading, activeSection]);
 
   // Format currency in Indian Rupees
   const formatCurrency = (amount: number) => {
@@ -79,10 +108,13 @@ export function AdminDashboardPage() {
     try {
       const updated = await pricingApi.updateAdminPricingSettings({
         globalCommissionPercentage: parseFloat(commRate) || 0,
+        platformFeeEnabled,
         platformFee: parseFloat(platformFeeInput) || 0,
+        deliveryChargeEnabled,
+        flatDeliveryFee: Math.max(0, parseFloat(flatDeliveryFeeInput) || 0),
       });
       setPricingSettings(updated);
-      setPricingNotice('✓ BharatBazaar pricing rules saved successfully. Effective immediately for new checkouts.');
+      setPricingNotice('✓ BharatBazaar pricing & delivery settings saved successfully. Effective immediately for new orders.');
     } catch (err: unknown) {
       setPricingNotice('Failed to update pricing settings: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -92,7 +124,7 @@ export function AdminDashboardPage() {
 
   return (
     <div className="bb-container bb-admin-orders-container">
-      <AdminNav activeModule="dashboard" />
+      <AdminNav activeModule={activeNavModule} />
 
       {/* Header Banner */}
       <div className="bb-admin-header">
@@ -304,7 +336,7 @@ export function AdminDashboardPage() {
           </div>
 
           {/* BharatBazaar Platform Pricing & Delivery Rules Configuration */}
-          <div className="bb-detail-card" style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #e2e8f0' }}>
+          <div id="admin-pricing-section" className="bb-detail-card" style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #e2e8f0', scrollMarginTop: '110px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>
@@ -334,75 +366,164 @@ export function AdminDashboardPage() {
             )}
 
             <form onSubmit={handleSavePricing}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-                <div className="bb-form-group">
-                  <label className="bb-label" style={{ fontWeight: 600, color: '#1e293b' }}>
-                    Global Seller Commission (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    className="bb-input"
-                    value={commRate}
-                    onChange={(e) => setCommRate(e.target.value)}
-                    required
-                  />
-                  <span className="bb-form-hint" style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                    Added to seller base price: Customer Price = Base + (Base × Commission%)
-                  </span>
-                </div>
+              {/* Core Controls Table: Platform Fee Toggle + Amount, Commission %, Delivery Toggle */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '20px' }}>
+                <table className="bb-table" style={{ margin: 0 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={{ width: '28%' }}>Setting</th>
+                      <th style={{ width: '22%' }}>Status / Mode</th>
+                      <th style={{ width: '50%' }}>Value / Configuration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* 1. Platform Fee ON/OFF + Amount */}
+                    <tr>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>Platform Fee</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>Charged once per order across all vendor packages</div>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => setPlatformFeeEnabled((prev) => !prev)}
+                          aria-pressed={platformFeeEnabled}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 12px',
+                            borderRadius: '999px',
+                            border: `1px solid ${platformFeeEnabled ? '#16a34a' : '#cbd5e1'}`,
+                            background: platformFeeEnabled ? '#dcfce7' : '#f1f5f9',
+                            color: platformFeeEnabled ? '#15803d' : '#475569',
+                            fontWeight: 700,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              background: platformFeeEnabled ? '#16a34a' : '#94a3b8',
+                            }}
+                          />
+                          {platformFeeEnabled ? 'ON' : 'OFF'}
+                        </button>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 600, color: '#334155' }}>₹</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="bb-input"
+                            style={{ maxWidth: '160px', opacity: platformFeeEnabled ? 1 : 0.5 }}
+                            value={platformFeeInput}
+                            onChange={(e) => setPlatformFeeInput(e.target.value)}
+                            disabled={!platformFeeEnabled}
+                            required
+                          />
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>
+                            {platformFeeEnabled ? `Active: ₹${platformFeeInput || 0} per order` : 'Waived (₹0 charged)'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
 
-                <div className="bb-form-group">
-                  <label className="bb-label" style={{ fontWeight: 600, color: '#1e293b' }}>
-                    Fixed Platform Fee per Order (₹)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="bb-input"
-                    value={platformFeeInput}
-                    onChange={(e) => setPlatformFeeInput(e.target.value)}
-                    required
-                  />
-                  <span className="bb-form-hint" style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                    Default ₹3. Charged exactly once per order across all vendor packages.
-                  </span>
-                </div>
-              </div>
+                    {/* 2. Seller Commission Rate (%) */}
+                    <tr>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>Seller Commission Rate</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>Set percentage added per order</div>
+                      </td>
+                      <td>
+                        <span className="bb-badge bb-badge-primary">ACTIVE</span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            className="bb-input"
+                            style={{ maxWidth: '160px' }}
+                            value={commRate}
+                            onChange={(e) => setCommRate(e.target.value)}
+                            required
+                          />
+                          <span style={{ fontWeight: 600, color: '#334155' }}>%</span>
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>
+                            Customer Price = Base + {commRate || 0}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
 
-              {/* Delivery Tiers Overview */}
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 8px', color: '#334155' }}>
-                  🚚 Configured Distance Delivery Tiers (per seller package)
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', fontSize: '12px' }}>
-                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                    <div style={{ color: '#64748b' }}>0 - 5 km (Local)</div>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹30</div>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                    <div style={{ color: '#64748b' }}>5 - 25 km</div>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹50</div>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                    <div style={{ color: '#64748b' }}>25 - 100 km</div>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹80</div>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                    <div style={{ color: '#64748b' }}>100 - 500 km</div>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹120</div>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                    <div style={{ color: '#64748b' }}>&gt; 500 km (National)</div>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>₹160</div>
-                  </div>
-                </div>
-                <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
-                  * Coordinates calculate great-circle distance via Haversine. If seller/customer coordinates are unconfigured, fallback rules apply: Local: ₹40, Regional: ₹70, National: ₹110.
-                </div>
+                    {/* 3. Delivery Charge ON/OFF + Flat Amount (₹) */}
+                    <tr>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>Delivery Charge</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>Flat delivery fee per seller package</div>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryChargeEnabled((prev) => !prev)}
+                          aria-pressed={deliveryChargeEnabled}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 12px',
+                            borderRadius: '999px',
+                            border: `1px solid ${deliveryChargeEnabled ? '#16a34a' : '#cbd5e1'}`,
+                            background: deliveryChargeEnabled ? '#dcfce7' : '#f1f5f9',
+                            color: deliveryChargeEnabled ? '#15803d' : '#475569',
+                            fontWeight: 700,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              background: deliveryChargeEnabled ? '#16a34a' : '#94a3b8',
+                            }}
+                          />
+                          {deliveryChargeEnabled ? 'ON' : 'OFF'}
+                        </button>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 600, color: '#334155' }}>₹</span>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            className="bb-input"
+                            style={{ maxWidth: '160px', opacity: deliveryChargeEnabled ? 1 : 0.5 }}
+                            value={flatDeliveryFeeInput}
+                            onChange={(e) => setFlatDeliveryFeeInput(e.target.value)}
+                            disabled={!deliveryChargeEnabled}
+                            required
+                          />
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>
+                            {deliveryChargeEnabled
+                              ? `Active: ₹${flatDeliveryFeeInput || 0} delivery charge`
+                              : 'Free Delivery (₹0 charged)'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -411,14 +532,14 @@ export function AdminDashboardPage() {
                   className="bb-btn bb-btn-primary"
                   disabled={pricingSaving}
                 >
-                  {pricingSaving ? 'Saving Settings...' : 'Save Pricing Rules'}
+                  {pricingSaving ? 'Saving Settings...' : 'Save Settings'}
                 </button>
               </div>
             </form>
           </div>
 
           {/* Recent Orders Overview */}
-          <div className="bb-detail-card" style={{ background: '#ffffff', padding: '24px', borderRadius: '8px' }}>
+          <div id="admin-recent-orders-section" className="bb-detail-card" style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', scrollMarginTop: '110px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>

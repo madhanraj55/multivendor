@@ -200,7 +200,7 @@ export class CheckoutService {
       totalItems: itemResults.length,
       totalQuantity,
       subtotalAmount,
-      platformFee: this.pricing.getSettings().platformFee,
+      platformFee: this.pricing.getEffectivePlatformFee(),
       taxAmount: anyUnconfiguredTax ? null : 0,
       taxStatus: anyUnconfiguredTax ? 'UNCONFIGURED' : 'CONFIGURED',
       items: itemResults,

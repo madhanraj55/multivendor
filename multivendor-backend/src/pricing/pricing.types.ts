@@ -12,7 +12,10 @@ export interface DeliveryRules {
 
 export interface PricingSettings {
   globalCommissionPercentage: number; // e.g. 15 (%)
+  platformFeeEnabled: boolean; // Admin ON/OFF toggle for platform fee
   platformFee: number; // fixed platform fee, e.g. ₹3
+  deliveryChargeEnabled: boolean; // Admin ON/OFF toggle for delivery charges
+  flatDeliveryFee?: number | null; // Single flat delivery charge set by admin (e.g. ₹40 or ₹80)
   deliveryRules: DeliveryRules;
 }
 

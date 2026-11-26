@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsNumber,
   IsOptional,
   Max,
@@ -48,10 +49,23 @@ export class UpdatePricingSettingsDto {
   @IsOptional()
   globalCommissionPercentage?: number;
 
+  @IsBoolean({ message: 'platformFeeEnabled must be a boolean' })
+  @IsOptional()
+  platformFeeEnabled?: boolean;
+
   @IsNumber({}, { message: 'Platform fee must be a number' })
   @Min(0, { message: 'Platform fee cannot be negative' })
   @IsOptional()
   platformFee?: number;
+
+  @IsBoolean({ message: 'deliveryChargeEnabled must be a boolean' })
+  @IsOptional()
+  deliveryChargeEnabled?: boolean;
+
+  @IsNumber({}, { message: 'Flat delivery fee must be a number' })
+  @Min(0, { message: 'Flat delivery fee cannot be negative' })
+  @IsOptional()
+  flatDeliveryFee?: number | null;
 
   @ValidateNested()
   @Type(() => DeliveryRulesDto)

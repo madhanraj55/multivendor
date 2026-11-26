@@ -8,7 +8,10 @@ describe('PricingService (BharatBazaar Pricing Model Unit Tests)', () => {
     // Reset to baseline defaults for test isolation
     service.updateSettings({
       globalCommissionPercentage: 10,
+      platformFeeEnabled: true,
       platformFee: 3,
+      deliveryChargeEnabled: true,
+      flatDeliveryFee: null,
       deliveryRules: {
         tiers: [
           { maxKm: 5, fee: 30 },
@@ -252,6 +255,55 @@ describe('PricingService (BharatBazaar Pricing Model Unit Tests)', () => {
       expect(newCalculation.commissionAmount).toBe(250);
       expect(newCalculation.customerPrice).toBe(1250);
       expect(service.getSettings().platformFee).toBe(10);
+    });
+
+    it('should waive platform fee and delivery charges when admin toggles them OFF', () => {
+      service.updateSettings({
+        platformFeeEnabled: false,
+        platformFee: 5,
+        deliveryChargeEnabled: false,
+      });
+
+      expect(service.getEffectivePlatformFee()).toBe(0);
+      expect(service.calculateDeliveryFee(15)).toBe(0);
+
+      const orderCalc = service.calculateOrderPricing(
+        [
+          {
+            shop: {
+              id: 'shop-1',
+              name: 'Test Shop',
+              pickupAddress: { latitude: 12.9716, longitude: 77.5946 },
+            },
+            items: [
+              {
+                variantId: 'var-1',
+                productTitle: 'Test Product',
+                sku: 'SKU-1',
+                quantity: 1,
+                sellerBasePrice: 100,
+              },
+            ],
+          },
+        ],
+        { latitude: 12.98, longitude: 77.6 },
+      );
+
+      expect(orderCalc.platformFee).toBe(0);
+      expect(orderCalc.shippingFee).toBe(0);
+
+      // Re-enable toggles
+      service.updateSettings({
+        platformFeeEnabled: true,
+        deliveryChargeEnabled: true,
+      });
+
+      expect(service.getEffectivePlatformFee()).toBe(5);
+      expect(service.calculateDeliveryFee(15)).toBe(50);
+
+      // Flat delivery fee override (e.g. ₹80)
+      service.updateSettings({ flatDeliveryFee: 80 });
+      expect(service.calculateDeliveryFee(15)).toBe(80);
     });
   });
 
