@@ -298,9 +298,9 @@ export function AuthPages({ defaultMode = 'login' }: { defaultMode?: 'login' | '
               gap: '0.65rem',
             }}
           >
-            <span style={{ fontSize: '1.25rem' }}>🛍️</span>
+            <span style={{ fontSize: '1.25rem' }}></span>
             <span>
-              <strong>Ready to checkout?</strong> Sign in or create an account to select your delivery address and complete your order.
+              <strong>Ready to checkout?</strong> Sign in or create an account
             </span>
           </div>
         )}
